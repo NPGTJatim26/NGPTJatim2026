@@ -7,11 +7,11 @@ async function load(file){
  try{
   const zip=await JSZip.loadAsync(file);
   const e=Object.values(zip.files).find(f=>!f.dir&&/\.dbf$/i.test(f.name));
-  if(!e){ROWS=[];COLS=[];render();st.textContent='File .dbf tidak ditemukan di dalam ZIP.';return}
-     const r = parseDBF(await e.async('arraybuffer')), cc = canonCols(r.cols, r.rows); ROWS = r.rows; COLS = cc.cols; render();
+  if(!e){ROWS=[];COLS=[];render();if(window.updatePdfImportPreview)window.updatePdfImportPreview();st.textContent='File .dbf tidak ditemukan di dalam ZIP.';return}
+      const r = parseDBF(await e.async('arraybuffer')), cc = canonCols(r.cols, r.rows); ROWS = r.rows; COLS = cc.cols; render();if(window.updatePdfImportPreview)window.updatePdfImportPreview();
      const miss = ['LUASHA', 'WADMKC'].filter(c => !COLS.includes(c));
      st.textContent = `${file.name}: ${ROWS.length.toLocaleString('id')} baris, ${COLS.length} kolom.` + (cc.renamed.length ? ` Nama kolom disesuaikan: ${cc.renamed.join(', ')}.` : '') + (miss.length ? ` Peringatan: kolom ${miss.join(', ')} tidak ditemukan.` : ''); dl.disabled = false;
- }catch(err){ROWS=[];COLS=[];render();st.textContent='Gagal membaca file: '+err.message}
+ }catch(err){ROWS=[];COLS=[];render();if(window.updatePdfImportPreview)window.updatePdfImportPreview();st.textContent='Gagal membaca file: '+err.message}
 }
 const drop=document.getElementById('drop'),fi=document.getElementById('file');
 drop.onclick=()=>fi.click();fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
