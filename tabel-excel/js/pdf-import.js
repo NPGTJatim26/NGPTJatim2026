@@ -2,8 +2,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
 const pdfNorm = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const pdfEscape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-const pdfNumberTokens = value => value.match(/(?:-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+(?:,\d+)?|(?<!\d)-(?=\s|$)|[–—−])/g) || [];
-const pdfNumber = value => /^[–—−-]$/.test(value) ? null : Number(value.replace(/\./g, '').replace(',', '.'));
+const pdfNumberTokens = value => value.match(/(?:-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+\.\d+|-?\d+(?:,\d+)?|(?<!\d)-(?=\s|$)|[–—−])/g) || [];
+const pdfNumber = value => {
+  if (/^[–—−-]$/.test(value)) return null;
+  if (value.includes(',')) return Number(value.replace(/\./g, '').replace(',', '.'));
+  return Number(/^-?\d{1,3}(?:\.\d{3})+$/.test(value) ? value.replace(/\./g, '') : value);
+};
 const pdfPagesInput = key => document.querySelector(`[data-pdf-pages="${key}"]`).value;
 
 function parsePdfPageSpec(spec) {
@@ -67,9 +71,10 @@ function pdfDistrictRows(lines, preferredValueCount, expectedNames = [], minimum
       const match = pattern.exec(line);
       if (!match) continue;
       const values = pdfNumberTokens(line.slice(match.index + match[0].length)).map(pdfNumber);
-      if (values.length < minimumValueCount) continue;
+      if (values.length < minimumValueCount && values.length) continue;
       const key = pdfNorm(name), previous = rows[key];
-      if (!previous || values.length === preferredValueCount || (previous.values.length !== preferredValueCount && values.length > previous.values.length)) rows[key] = { name, values };
+      const normalized = values.length ? values : Array(preferredValueCount).fill(0);
+      if (!previous || normalized.length === preferredValueCount || (previous.values.length !== preferredValueCount && normalized.length > previous.values.length)) rows[key] = { name, values: normalized };
     }
   }
   for (const line of lines) {
@@ -96,28 +101,39 @@ function pdfEmploymentRows(lines) {
   const matches = definitions.map(definition => ({ ...definition, match: definition.pattern.exec(text) })).filter(row => row.match).sort((a, b) => a.match.index - b.match.index);
   return matches.map((row, index) => {
     const start = row.match.index + row.match[0].length, end = matches[index + 1] ? matches[index + 1].match.index : text.length;
-    const values = pdfNumberTokens(text.slice(start, end)).map(pdfNumber).filter(value => value !== null);
-    return { name: row.name, male: values[0] ?? null, female: values[1] ?? null };
+    const values = pdfNumberTokens(text.slice(start, end)).map(pdfNumber);
+    return { name: row.name, male: values[0] ?? 0, female: values[1] ?? 0 };
   });
 }
 
 function pdfIndustryRows(lines) {
   const codeNames = PD_USAHA.slice().sort((a, b) => b[0].length - a[0].length);
-  const expression = /^(R\s*,\s*S\s*,\s*T\s*,\s*U|M\s*,\s*N|[A-L]|O|P|Q)\s*(.*)$/i;
+  const expression = /^\s*\(?\s*(R\s*,\s*S\s*,\s*T\s*,\s*U|M\s*,\s*N|[A-L]|O|P|Q)\s*\)?(?:\s+(.*))?$/i;
   const records = [];
   let current = null;
   for (const line of lines) {
     const match = expression.exec(line);
     const code = match && codeNames.find(row => pdfNorm(row[0]) === pdfNorm(match[1]));
-    const firstNameWord = code && code[1].split(/[\s,/;]/)[0];
-    if (code && match[2] && pdfNorm(match[2]).startsWith(pdfNorm(firstNameWord))) {
+    const nameWords = code ? code[1].split('/').map(part => part.trim().split(/[\s,;]/)[0]).filter(Boolean) : [];
+    const startsWithName = code && match[2] && nameWords.some(word => pdfNorm(match[2]).startsWith(pdfNorm(word)));
+    if (code && (!match[2] || startsWithName)) {
       if (current) records.push(current);
-      current = { code: code[0], text: match[2] };
+      current = { code: code[0], text: match[2] || '' };
     } else if (current) current.text += ' ' + line;
   }
   if (current) records.push(current);
-  return Object.fromEntries(records.map(record => [pdfNorm(record.code), pdfNumberTokens(record.text).map(pdfNumber).filter(value => value !== null).slice(0, 5)]));
+  const rows = {};
+  records.forEach(record => {
+    const definition = codeNames.find(row => pdfNorm(row[0]) === pdfNorm(record.code));
+    const nameWords = definition && definition[1].split('/').map(part => part.trim().split(/[\s,;]/)[0]).filter(Boolean);
+    if (!definition || !nameWords.some(word => pdfNorm(record.text).includes(pdfNorm(word)))) return;
+    const values = pdfNumberTokens(record.text).map(pdfNumber).slice(0, 5).map(value => value ?? 0);
+    rows[pdfNorm(record.code)] = [...values, ...Array(Math.max(0, 5 - values.length)).fill(0)];
+  });
+  return rows;
 }
+
+const pdfHasHeader = (lines, patterns) => patterns.every(pattern => pattern.test(lines.join(' ')));
 
 async function extractPdfStatistics(file) {
   const document = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
@@ -133,26 +149,41 @@ async function extractPdfStatistics(file) {
       read(pageSpecs.population), read(pageSpecs.ratio), read(pageSpecs.employment), read(pageSpecs.adhb), read(pageSpecs.adhk)
     ]);
     const headingText = lines => lines.join(' ').replace(/\b(?:table|tabel)\b/gi, ' ').replace(/\b\d+(?:\.\d+)?\b/g, ' ').replace(/\s+/g, ' ');
+    const hasPopulationHeader = pdfHasHeader(populationLines, [/jumlah penduduk|population/i, /laju pertumbuhan|growth rate/i, /kecamatan|district/i]);
+    const hasRatioHeader = pdfHasHeader(ratioLines, [/rasio jenis kelamin|population sex ratio/i, /kecamatan|district/i]);
+    const hasEmploymentHeader = pdfHasHeader(employmentLines, [/status pekerjaan utama|main employment status/i, /laki[\s-]*laki|male/i, /perempuan|female/i]);
     const isPdrb = text => /produk domestik regional bruto|gross regional domestic product/i.test(text);
     const isPercentageDistribution = text => /distribusi persentase|percentage distribution/i.test(text);
     const adhbHeading = headingText(adhbLines), adhkHeading = headingText(adhkLines);
+    const hasIndustryHeader = lines => /lapangan usaha|industry/i.test(lines.join(' ')) && [2021, 2022, 2023, 2024, 2025].every(year => lines.join(' ').includes(String(year)));
+    if (!hasPopulationHeader) throw new Error('Header tabel penduduk/laju tidak ditemukan pada halaman yang dipilih.');
+    if (!hasRatioHeader) throw new Error('Header tabel rasio jenis kelamin tidak ditemukan pada halaman yang dipilih.');
+    if (!hasEmploymentHeader) throw new Error('Header tabel status pekerjaan (laki-laki/perempuan) tidak ditemukan pada halaman yang dipilih.');
     if (!isPdrb(adhbHeading) || isPercentageDistribution(adhbHeading) || !/harga\s+berlaku|current market prices/i.test(adhbHeading)) throw new Error('Halaman PDRB ADHB tidak dikenali. Pilih halaman berjudul Produk Domestik Regional Bruto Atas Dasar Harga Berlaku (Gross Regional Domestic Product at Current Market Prices), bukan tabel distribusi/persentase.');
     if (!isPdrb(adhkHeading) || isPercentageDistribution(adhkHeading) || !/harga\s+konstan|constant market prices/i.test(adhkHeading)) throw new Error('Halaman PDRB ADHK tidak dikenali. Pilih halaman berjudul Produk Domestik Regional Bruto Atas Dasar Harga Konstan (Gross Regional Domestic Product at Constant Market Prices), bukan tabel ADHB atau distribusi/persentase.');
+    if (!hasIndustryHeader(adhbLines)) throw new Error('Header lapangan usaha dan tahun 2021–2025 tidak ditemukan pada halaman PDRB ADHB.');
+    if (!hasIndustryHeader(adhkLines)) throw new Error('Header lapangan usaha dan tahun 2021–2025 tidak ditemukan pada halaman PDRB ADHK.');
     const expectedNames = buildT3()?.rows.map(row => row.k) || [];
     const population = pdfDistrictRows(populationLines, 6, expectedNames), ratios = pdfDistrictRows(ratioLines, 1, expectedNames, 1);
-    const districts = Object.values(population).map(row => ({
-      name: row.name,
-      population: row.values.length >= 4 ? row.values[1] : row.values[0],
-      growth: row.values.length >= 4 ? row.values[3] : row.values[1],
-      ratio: ratios[pdfNorm(row.name)]?.values.length >= 4 ? ratios[pdfNorm(row.name)].values[3] : ratios[pdfNorm(row.name)]?.values.length >= 2 ? ratios[pdfNorm(row.name)].values[1] : ratios[pdfNorm(row.name)]?.values[0] ?? null
+    const districts = (expectedNames.length ? expectedNames : Object.values(population).map(row => row.name)).map(name => {
+      const popValues = population[pdfNorm(name)]?.values || Array(6).fill(0), ratioValues = ratios[pdfNorm(name)]?.values || [0];
+      return {
+        name,
+        population: (popValues.length >= 4 ? popValues[1] : popValues[0]) ?? 0,
+        growth: (popValues.length >= 4 ? popValues[3] : popValues[1]) ?? 0,
+        ratio: (ratioValues.length >= 4 ? ratioValues[3] : ratioValues.length >= 2 ? ratioValues[1] : ratioValues[0]) ?? 0
+      };
+    });
+    const parsedEmployment = new Map(pdfEmploymentRows(employmentLines).map(row => [pdfNorm(row.name), row]));
+    const employment = PK_STATUS.map(name => {
+      const row = parsedEmployment.get(pdfNorm(name));
+      return { name, male: row?.male ?? 0, female: row?.female ?? 0 };
+    });
+    const normalizeIndustryRows = rows => Object.fromEntries(PD_USAHA.map(([code]) => {
+      const values = rows[pdfNorm(code)] || [];
+      return [pdfNorm(code), [...values.slice(0, 5), ...Array(Math.max(0, 5 - values.length)).fill(0)]];
     }));
-    const employment = pdfEmploymentRows(employmentLines);
-    const adhb = pdfIndustryRows(adhbLines), adhk = pdfIndustryRows(adhkLines);
-    const codes = PD_USAHA.map(row => pdfNorm(row[0]));
-    const missing = [...codes.filter(code => (adhb[code] || []).length !== 5).map(code => `ADHB ${code}`), ...codes.filter(code => (adhk[code] || []).length !== 5).map(code => `ADHK ${code}`)];
-    if (!districts.length || districts.some(row => row.population === null || row.growth === null || row.ratio === null)) missing.push('penduduk, pertumbuhan, atau rasio jenis kelamin per kecamatan');
-    if (employment.length !== PK_STATUS.length || employment.some(row => row.male === null || row.female === null)) missing.push('status pekerjaan laki-laki/perempuan');
-    if (missing.length) throw new Error('Data tidak terbaca lengkap: ' + missing.join(', ') + '. Pastikan halaman yang dimasukkan memuat tabel yang dimaksud.');
+    const adhb = normalizeIndustryRows(pdfIndustryRows(adhbLines)), adhk = normalizeIndustryRows(pdfIndustryRows(adhkLines));
     return { fileName: file.name, districts, employment, adhb, adhk, years: [2021, 2022, 2023, 2024, 2025] };
   } finally {
     await document.destroy();
@@ -164,8 +195,10 @@ let pendingPdfStatistics = null;
 const pdfFileButton = document.querySelector('.pdf-file-button');
 
 function pdfTable(headers, rows) {
-  return `<div class="raw-scroll"><table><tr>${headers.map(header => `<th>${pdfEscape(header)}</th>`).join('')}</tr>${rows.map(row => `<tr>${row.map(value => `<td>${pdfEscape(value ?? '-')}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  return `<div class="raw-scroll"><table><tr>${headers.map(header => `<th>${pdfEscape(header)}</th>`).join('')}</tr>${rows.map(row => `<tr>${row.map(value => value && value.pdfEdit ? `<td class="n"><input class="pdf-edit-input" type="number" step="any" aria-label="${pdfEscape(value.label)}" data-pdf-edit-kind="${value.kind}" data-pdf-edit-row="${value.row}" data-pdf-edit-field="${value.field}"${value.year == null ? '' : ` data-pdf-edit-year="${value.year}"`} value="${pdfEscape(value.value)}"></td>` : `<td>${pdfEscape(value ?? '-')}</td>`).join('')}</tr>`).join('')}</table></div>`;
 }
+
+const pdfEditableCell = (value, kind, row, field, label, year) => ({ pdfEdit: true, value: value ?? 0, kind, row, field, label, year });
 
 function updatePdfImportPreview() {
   if (!pendingPdfStatistics) return;
@@ -179,15 +212,15 @@ function updatePdfImportPreview() {
   if (unmatched.length) warnings.push('Kecamatan PDF yang tidak cocok: ' + unmatched.join(', '));
   if (missing.length) warnings.push('Kecamatan shapefile tanpa data PDF: ' + missing.join(', '));
   if (table && !unmatched.length && !missing.length) warnings.push(`Wilayah ${wilayah()} cocok dengan seluruh kecamatan pada PDF.`);
-  const industries = data => PD_USAHA.map(([code, name]) => [code, name, ...(data[pdfNorm(code)] || [])]);
+  const industries = kind => PD_USAHA.map(([code, name], row) => [code, name, ...pendingPdfStatistics.years.map((year, index) => pdfEditableCell(pendingPdfStatistics[kind][pdfNorm(code)][index], kind, row, 'value', `${kind.toUpperCase()} ${code} ${year}`, index))]);
   pdfReview.innerHTML = `<p><b>${pdfEscape(pendingPdfStatistics.fileName)}</b> · penduduk/pekerjaan 2025 · PDRB 2021–2025</p>
     <p>${matched.length}/${activeNames.length} kecamatan cocok · ${pendingPdfStatistics.employment.length} kategori pekerjaan · ${PD_USAHA.length} lapangan usaha per seri PDRB.</p>
     ${warnings.length ? `<p class="note pdf-review-warnings">${warnings.map(pdfEscape).join('<br>')}</p>` : '<p class="note">Semua kecamatan cocok dengan shapefile aktif.</p>'}
-    <details class="pdf-review-details"><summary>Pratinjau data sebelum diterapkan</summary>
-      <h3>Penduduk per kecamatan</h3>${pdfTable(['Kecamatan', 'Penduduk', 'Pertumbuhan (%)', 'Rasio jenis kelamin'], pendingPdfStatistics.districts.map(row => [row.name, row.population, row.growth, row.ratio]))}
-      <h3>Status pekerjaan 2025</h3>${pdfTable(['Status', 'Laki-laki', 'Perempuan'], pendingPdfStatistics.employment.map(row => [row.name, row.male, row.female]))}
-      <h3>PDRB ADHB (miliar rupiah)</h3>${pdfTable(['Kode', 'Lapangan usaha', ...pendingPdfStatistics.years], industries(pendingPdfStatistics.adhb))}
-      <h3>PDRB ADHK (miliar rupiah)</h3>${pdfTable(['Kode', 'Lapangan usaha', ...pendingPdfStatistics.years], industries(pendingPdfStatistics.adhk))}
+    <details class="pdf-review-details"><summary>Pratinjau dan edit angka sebelum diterapkan</summary>
+      <h3>Penduduk per kecamatan</h3>${pdfTable(['Kecamatan', 'Penduduk', 'Pertumbuhan (%)', 'Rasio jenis kelamin'], pendingPdfStatistics.districts.map((row, index) => [row.name, pdfEditableCell(row.population, 'district', index, 'population', `Penduduk ${row.name}`), pdfEditableCell(row.growth, 'district', index, 'growth', `Pertumbuhan ${row.name}`), pdfEditableCell(row.ratio, 'district', index, 'ratio', `Rasio jenis kelamin ${row.name}`)]))}
+      <h3>Status pekerjaan 2025</h3>${pdfTable(['Status', 'Laki-laki', 'Perempuan'], pendingPdfStatistics.employment.map((row, index) => [row.name, pdfEditableCell(row.male, 'employment', index, 'male', `${row.name}, laki-laki`), pdfEditableCell(row.female, 'employment', index, 'female', `${row.name}, perempuan`)]))}
+      <h3>PDRB ADHB (miliar rupiah)</h3>${pdfTable(['Kode', 'Lapangan usaha', ...pendingPdfStatistics.years], industries('adhb'))}
+      <h3>PDRB ADHK (miliar rupiah)</h3>${pdfTable(['Kode', 'Lapangan usaha', ...pendingPdfStatistics.years], industries('adhk'))}
     </details>
     <label class="pdf-confirm"><input type="checkbox" id="pdf-confirm"> Saya sudah memeriksa pratinjau dan setuju mengganti isian sebelumnya</label>
     <div class="bar"><button id="pdf-apply" type="button" disabled>Terapkan data PDF</button></div>`;
@@ -201,6 +234,19 @@ function updatePdfImportPreview() {
 }
 
 window.updatePdfImportPreview = updatePdfImportPreview;
+pdfReview.addEventListener('change', event => {
+  const input = event.target.closest('[data-pdf-edit-kind]');
+  if (!input || !pendingPdfStatistics) return;
+  const value = input.value === '' ? 0 : Number(input.value);
+  if (!Number.isFinite(value)) return;
+  const row = Number(input.dataset.pdfEditRow), kind = input.dataset.pdfEditKind;
+  if (kind === 'district' || kind === 'employment') {
+    pendingPdfStatistics[kind][row][input.dataset.pdfEditField] = value;
+  } else if (kind === 'adhb' || kind === 'adhk') {
+    const code = pdfNorm(PD_USAHA[row][0]), year = Number(input.dataset.pdfEditYear);
+    pendingPdfStatistics[kind][code][year] = value;
+  }
+});
 pdfFile.onchange = async () => {
   const file = pdfFile.files[0];
   if (!file) return;

@@ -39,6 +39,8 @@ main{padding:20px 24px;max-width:1500px;margin:auto}
 #pdf-status.error,.pdf-review-warnings{color:var(--bad)}
 #pdf-review{margin-top:12px}
 #pdf-review table{margin:8px 0 14px}
+#pdf-review .pdf-edit-input{width:96px;max-width:100%;padding:5px 6px;border:1px solid var(--bd);border-radius:5px;background:var(--bg);color:var(--tx);font:inherit;font-variant-numeric:tabular-nums;text-align:right}
+#pdf-review .pdf-edit-input:focus{outline:2px solid var(--acc);outline-offset:1px}
 .pdf-review-details{max-height:55vh;overflow:auto}
 #pdf-review h3{margin:14px 0 4px;font-size:13px}
 @media(max-width:640px){.pdf-import-head{align-items:flex-start}.pdf-file-button{width:100%;text-align:center}}
