@@ -107,28 +107,86 @@ function pdfEmploymentRows(lines) {
 }
 
 function pdfIndustryRows(lines) {
-  const codeNames = PD_USAHA.slice().sort((a, b) => b[0].length - a[0].length);
-  const expression = /^\s*\(?\s*(R\s*,\s*S\s*,\s*T\s*,\s*U|M\s*,\s*N|[A-L]|O|P|Q)\s*\)?(?:\s+(.*))?$/i;
+  const aliases = {
+    a: ['Pertanian', 'Agriculture'],
+    b: ['Pertambangan', 'Mining'],
+    c: ['Industri Pengolahan', 'Manufacturing'],
+    d: ['Pengadaan Listrik', 'Electricity and Gas'],
+    e: ['Pengadaan Air', 'Water Supply'],
+    f: ['Konstruksi', 'Construction'],
+    g: ['Perdagangan Besar dan Eceran', 'Wholesale and Retail'],
+    h: ['Transportasi dan Pergudangan', 'Transportation and Storage'],
+    i: ['Penyediaan Akomodasi', 'Accommodation and Food'],
+    j: ['Informasi dan Komunikasi', 'Information and Communication'],
+    k: ['Jasa Keuangan dan Asuransi', 'Financial and Insurance'],
+    l: ['Real Estat', 'Real Estate'],
+    mn: ['Jasa Perusahaan', 'Business Activities'],
+    o: ['Administrasi Pemerintahan', 'Public Administration'],
+    p: ['Jasa Pendidikan', 'Education'],
+    q: ['Jasa Kesehatan', 'Human Health'],
+    rstu: ['Jasa Lainnya', 'Other Services']
+  };
+  const labels = PD_USAHA.map(([code]) => ({
+    code: pdfNorm(code),
+    names: (aliases[pdfNorm(code)] || []).map(pdfNorm).sort((a, b) => b.length - a.length)
+  })).sort((a, b) => Math.max(...b.names.map(name => name.length)) - Math.max(...a.names.map(name => name.length)));
+  const codePattern = /^\s*\(?\s*(R\s*,\s*S\s*,\s*T\s*,\s*U|M\s*,\s*N|[A-L]|O|P|Q)\s*\)?(?:\s+(.*))?$/i;
+  const headerAt = lines.findIndex(line => /lapangan usaha|industry/i.test(line) && /2021/.test(line));
+  const tableLines = headerAt < 0 ? lines : lines.slice(headerAt + 1);
   const records = [];
-  let current = null;
-  for (const line of lines) {
-    const match = expression.exec(line);
-    const code = match && codeNames.find(row => pdfNorm(row[0]) === pdfNorm(match[1]));
-    const nameWords = code ? code[1].split('/').map(part => part.trim().split(/[\s,;]/)[0]).filter(Boolean) : [];
-    const startsWithName = code && match[2] && nameWords.some(word => pdfNorm(match[2]).startsWith(pdfNorm(word)));
-    if (code && (!match[2] || startsWithName)) {
-      if (current) records.push(current);
-      current = { code: code[0], text: match[2] || '' };
-    } else if (current) current.text += ' ' + line;
+  let current = null, pendingCode = null, started = false;
+  const startRecord = (code, text = '') => {
+    if (current && current.code !== code) records.push(current);
+    if (current && current.code === code) current.text += ' ' + text;
+    else current = { code, text };
+    pendingCode = null;
+    started = true;
+  };
+  const findLabel = text => {
+    const normalized = pdfNorm(text);
+    return labels.find(label => label.names.some(name => normalized.startsWith(name)));
+  };
+  for (const line of tableLines) {
+    const trimmed = line.replace(/https?:\/\/\S+/gi, '').trim();
+    if (!trimmed) continue;
+    if (/lapangan usaha|industry/i.test(trimmed) && /2021/.test(trimmed)) continue;
+    if (/^\(?\s*\d+\s*\)?(?:\s+\(?\s*\d+\s*\)?)*$/.test(trimmed)) continue;
+    if (/produk domestik regional bruto|gross regional domestic product|catatan\s*\/\s*note|sumber\s*\/\s*source/i.test(trimmed)) {
+      if (started) break;
+      continue;
+    }
+
+    const codeMatch = codePattern.exec(trimmed);
+    const code = codeMatch && PD_USAHA.find(row => pdfNorm(row[0]) === pdfNorm(codeMatch[1]));
+    const remainder = codeMatch ? (codeMatch[2] || '') : trimmed;
+    const label = findLabel(remainder);
+    if (code && label && codeMatch[2]) {
+      startRecord(label.code, remainder);
+      continue;
+    }
+    if (code && !codeMatch[2]) {
+      pendingCode = pdfNorm(code[0]);
+      continue;
+    }
+    if (label) {
+      startRecord(label.code, remainder);
+      continue;
+    }
+    if (pendingCode) {
+      const pending = labels.find(item => item.code === pendingCode);
+      const hasPendingName = pending && pending.names.some(name => pdfNorm(trimmed).startsWith(name));
+      if (hasPendingName) startRecord(pendingCode, trimmed);
+      else if (current) current.text += ' ' + trimmed;
+      continue;
+    }
+    if (current) current.text += ' ' + trimmed;
   }
   if (current) records.push(current);
+
   const rows = {};
   records.forEach(record => {
-    const definition = codeNames.find(row => pdfNorm(row[0]) === pdfNorm(record.code));
-    const nameWords = definition && definition[1].split('/').map(part => part.trim().split(/[\s,;]/)[0]).filter(Boolean);
-    if (!definition || !nameWords.some(word => pdfNorm(record.text).includes(pdfNorm(word)))) return;
     const values = pdfNumberTokens(record.text).map(pdfNumber).slice(0, 5).map(value => value ?? 0);
-    rows[pdfNorm(record.code)] = [...values, ...Array(Math.max(0, 5 - values.length)).fill(0)];
+    rows[record.code] = [...values, ...Array(Math.max(0, 5 - values.length)).fill(0)];
   });
   return rows;
 }
