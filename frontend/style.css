@@ -115,6 +115,25 @@ header h1 {
     height: 18px
 }
 
+.brand-link {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    border-radius: 8px
+}
+
+.brand-link:focus-visible {
+    outline: 2px solid var(--ac);
+    outline-offset: 3px
+}
+
+.brand-logo {
+    display: block;
+    width: 44px;
+    height: 44px;
+    object-fit: contain
+}
+
 select {
     height: 36px;
     padding: 0 10px;

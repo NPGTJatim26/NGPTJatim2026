@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Analisis Penggunaan Tanah</title>
+<title>Dashboard NPGT Regional Jatim 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -16,8 +16,10 @@ try{document.documentElement.dataset.theme=localStorage.theme||(matchMedia("(pre
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;font-family:"Plus Jakarta Sans",system-ui,Segoe UI,Arial,sans-serif;background:radial-gradient(700px 360px at 50% -10%,rgba(45,212,191,.18),transparent 70%),var(--bg);color:var(--tx);letter-spacing:-.01em}
 .top{display:flex;align-items:center;gap:10px;padding:16px clamp(16px,4vw,40px);font-weight:700}
-.logo{width:32px;height:32px;border-radius:8px;background:var(--ac);color:var(--ac-tx);display:grid;place-items:center}
-.logo svg,.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.brand-link{display:inline-flex;align-items:center;flex:none;border-radius:8px}
+.brand-link:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
+.brand-logo{display:block;width:44px;height:44px;object-fit:contain}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .sp{flex:1}
 button{font-family:inherit;cursor:pointer}
 .th{width:36px;height:36px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);display:grid;place-items:center}
@@ -44,7 +46,8 @@ h1{margin:0 0 10px;font-size:clamp(28px,4.5vw,44px);line-height:1.1;letter-spaci
 </head>
 <body>
 <header class="top">
-  <span class="logo"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>Analisis Penggunaan Tanah
+  <a class="brand-link" href="index.html" aria-label="Kembali ke halaman utama"><img class="brand-logo" src="assets/logo-npgt-regional-2026-jawa-timur.svg" alt="NPGT Regional 2026 Jawa Timur"></a>
+  <span>NPGT Regional Jatim 2026</span>
   <span class="sp"></span>
   <button class="th" id="theme" title="Ganti tema" aria-label="Ganti tema">
     <svg class="ic moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -53,7 +56,7 @@ h1{margin:0 0 10px;font-size:clamp(28px,4.5vw,44px);line-height:1.1;letter-spaci
 </header>
 <main>
   <h1>Dari shapefile ke analisis, dalam satu tempat.</h1>
-  <p class="lead">Pilih alat yang ingin Anda gunakan. Selanjutnya Anda bisa mencoba langsung (trial) atau masuk/daftar agar file tersimpan di akun.</p>
+  <p class="lead">Pilih alat yang ingin Anda gunakan. Selanjutnya Anda bisa mencoba langsung (trial) atau masuk/daftar lalu menghubungkan Google Drive untuk menyimpan file.</p>
   <div class="grid">
     <section class="card">
       <h2>Dashboard Peta &amp; Analisis</h2>
@@ -73,7 +76,7 @@ h1{margin:0 0 10px;font-size:clamp(28px,4.5vw,44px);line-height:1.1;letter-spaci
     <h3 id="mt">Pilih cara akses</h3>
     <p id="ms"></p>
     <button class="opt" id="o-trial"><b>Coba Trial <span class="badge">tanpa akun</span></b><span>Langsung pakai. File yang diunggah <u>tidak disimpan</u> ke database.</span></button>
-    <button class="opt" id="o-login"><b id="o-login-t">Masuk / Daftar</b><span id="o-login-s">File yang diunggah tersimpan di akun dan bisa dibuka lagi kapan saja.</span></button>
+    <button class="opt" id="o-login"><b id="o-login-t">Masuk / Daftar</b><span id="o-login-s">Setelah masuk, hubungkan Google Drive untuk menyimpan dan membuka file Anda.</span></button>
     <button class="close" id="close">Batal</button>
   </div>
 </div>
@@ -101,10 +104,10 @@ document.querySelectorAll('[data-app]').forEach(b => b.onclick = () => {
   $('#ms').textContent = app.name + ' — bagaimana Anda ingin menggunakannya?';
   if (session) {
     $('#o-login-t').textContent = 'Lanjutkan sebagai ' + session.user.email;
-    $('#o-login-s').textContent = 'File yang diunggah tersimpan di akun Anda.';
+    $('#o-login-s').textContent = 'Hubungkan Google Drive setelah masuk untuk menyimpan dan membuka file Anda.';
   } else {
     $('#o-login-t').textContent = 'Masuk / Daftar';
-    $('#o-login-s').textContent = 'File yang diunggah tersimpan di akun dan bisa dibuka lagi kapan saja.';
+    $('#o-login-s').textContent = 'Setelah masuk, hubungkan Google Drive untuk menyimpan dan membuka file Anda.';
   }
   mod.hidden = false; $('#o-trial').focus();
 });

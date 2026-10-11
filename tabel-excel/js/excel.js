@@ -79,7 +79,7 @@ function sheetNew(wb, name) {
     const ws = wb.addWorksheet(name);
     ws.getCell(1, 1).value = NEW_TEXT; ws.getColumn(1).width = 28;
 }
-async function downloadXLSX() {
+async function downloadXLSX(shouldDownload = true) {
     const wb = new ExcelJS.Workbook(); resetXCharts(); wb.calcProperties = { fullCalcOnLoad: true };   // Excel hitung ulang semua rumus saat file dibuka
     // urutan sheet mengikuti SHEETS (sheets.js)
     SHEETS.forEach(s => {
@@ -89,7 +89,11 @@ async function downloadXLSX() {
         else if (s.kind === 'extra') sheetExtra(wb, EXTRA[s.i], EXTRA_MODELS[s.i], name);
         else sheetNew(wb, name);
     });
-    const buf = await wb.xlsx.writeBuffer(), a = document.createElement('a');
-    a.href = URL.createObjectURL(await injectCharts(buf));   // sisipkan grafik asli Excel
-    a.download = 'Rekap_DJPA.xlsx'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    const buf = await wb.xlsx.writeBuffer(), blob = await injectCharts(buf);   // sisipkan grafik asli Excel
+    if (shouldDownload) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Rekap_DJPA.xlsx'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    return blob;
 }

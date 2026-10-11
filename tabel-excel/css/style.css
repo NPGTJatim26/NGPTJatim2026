@@ -8,8 +8,9 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:"Plus Jakarta Sans",system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx);letter-spacing:-.01em}
 header{background:var(--hero);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
-.logo{width:32px;height:32px;border-radius:8px;background:var(--acc);color:var(--acc-tx);display:grid;place-items:center;flex:none}
-.logo svg{width:18px;height:18px}
+.brand-link{display:inline-flex;align-items:center;flex:none;border-radius:8px}
+.brand-link:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.brand-logo{display:block;width:44px;height:44px;object-fit:contain}
 header h1{margin:0;font-size:17px;font-weight:700}
 header small{display:block;font-size:12px;opacity:.8;font-weight:400;margin-top:1px}
 #theme{margin-left:auto;width:36px;height:36px;padding:0;border-radius:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);font-size:16px;line-height:1}

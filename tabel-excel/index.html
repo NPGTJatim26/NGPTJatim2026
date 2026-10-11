@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Analisis Penggunaan Tanah</title>
+    <title>Tabel Rekap & Excel</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,23 +23,10 @@
   </head>
   <body>
     <header>
-      <div class="logo">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m12 2 9 5-9 5-9-5 9-5Z" />
-          <path d="m3 12 9 5 9-5" />
-          <path d="m3 17 9 5 9-5" />
-        </svg>
-      </div>
+      <a class="brand-link" href="../index.html" aria-label="Kembali ke halaman utama"><img class="brand-logo" src="../assets/logo-npgt-regional-2026-jawa-timur.svg" alt="NPGT Regional 2026 Jawa Timur" /></a>
       <h1>
-        Analisis Penggunaan Tanah<small
-          >Rekap penggunaan &amp; penguasaan tanah dari shapefile (ZIP)</small
+        NPGT Regional Jatim 2026<small
+          >Tabulasi penggunaan &amp; penguasaan tanah dari shapefile (ZIP)</small
         >
       </h1>
       <button
@@ -108,6 +95,9 @@
     <!-- Mode trial / akun (harus setelah main.js) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../frontend/supabase.js"></script>
+    <script src="../frontend/drive-config.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="../frontend/drive.js"></script>
     <script src="js/account.js"></script>
   </body>
 </html>
