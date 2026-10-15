@@ -1,0 +1,35 @@
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#0a1214;--card:#111b1d;--bd:#223235;--tx:#e8f1f0;--mu:#8aa09e;--ac:#2dd4bf;--ac-tx:#04211d;--hov:#16242a;--scrim:rgba(0,0,0,.6)}
+:root[data-theme=light]{--bg:#f1f7f6;--card:#fff;--bd:#d3e2df;--tx:#0f1f1e;--mu:#587270;--ac:#0d9488;--ac-tx:#fff;--hov:#eaf3f1;--scrim:rgba(15,31,30,.45)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(700px 360px at 50% -10%,rgba(45,212,191,.14),transparent 70%),var(--bg);color:var(--tx);font:14px/1.5 "Plus Jakarta Sans",system-ui,"Segoe UI",sans-serif}
+.top{min-height:76px;display:flex;align-items:center;gap:12px;padding:12px clamp(16px,4vw,40px);border-bottom:1px solid var(--bd)}
+.brand-link{display:inline-flex;align-items:center;flex:none;border-radius:8px}.brand-link:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
+.brand-logo{display:block;width:44px;height:44px;object-fit:contain}
+.brand-title{display:grid;gap:1px}.brand-title strong{font-size:14px}.brand-title span,.eyebrow{color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.08em}
+.sp{flex:1}.home-link{color:var(--mu);text-decoration:none;font-size:13px}.home-link:hover{color:var(--ac)}
+.th{width:36px;height:36px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);display:grid;place-items:center;cursor:pointer}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.th .sun{display:none}[data-theme=dark] .th .sun{display:block}[data-theme=dark] .th .moon{display:none}
+.app{display:grid;grid-template-columns:minmax(0,760px);justify-content:center;max-width:1560px;margin:0 auto;padding:24px clamp(16px,3vw,36px) 40px;align-items:start}
+.side{min-width:0;background:var(--card);border:1px solid var(--bd);border-radius:10px}
+.side{padding:22px;position:sticky;top:16px}
+.panel-heading{padding-bottom:18px;border-bottom:1px solid var(--bd)}
+.eyebrow{color:var(--ac)}
+.panel-heading h1{font-size:21px;line-height:1.25;margin:6px 0 8px;letter-spacing:0}
+.mu{color:var(--mu);font-size:12px}.panel-heading p{margin:0}
+#drop{display:grid;justify-items:center;gap:5px;border:1px dashed var(--mu);border-radius:8px;padding:18px 12px;margin:18px 0 14px;text-align:center;cursor:pointer;transition:background .18s,border-color .18s}
+#drop:hover,#drop:focus-visible{border-color:var(--ac);background:var(--hov);outline:none}
+.upload-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:var(--hov);color:var(--ac);font-size:20px;font-weight:700;line-height:1}
+.file-name{max-width:100%;overflow-wrap:anywhere;color:var(--ac);font-size:12px}
+.fields{display:grid;gap:6px}.fields label{font-size:12px;color:var(--tx);font-weight:600;margin-top:7px}.fields label span{color:var(--mu);font-weight:400}
+input[type=text],input[type=number]{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit;font-size:13px}
+input:focus{outline:2px solid var(--ac);outline-offset:1px}input::placeholder{color:var(--mu)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+button{font:inherit;cursor:pointer}.actions button{min-height:40px;padding:9px 14px;border-radius:7px;border:1px solid var(--ac);background:var(--ac);color:var(--ac-tx);font-size:13px;font-weight:700}
+.actions button.o{background:transparent;color:var(--ac)}.actions button:hover:not(:disabled){filter:brightness(1.08)}button:disabled{opacity:.45;cursor:default}
+#st{font-size:12px;margin-top:10px;white-space:pre-wrap;min-height:18px}
+.note{margin:12px 0 0;padding-top:12px;border-top:1px solid var(--bd);color:var(--mu);font-size:11px;line-height:1.6}
+.fill-sample{background:#fff3a0;color:#111;padding:0 3px}
+@media(max-width:900px){.app{padding-inline:16px}.side{padding:17px}}
+@media(max-width:720px){.app{grid-template-columns:1fr;padding-top:14px}.side{position:static}}
+@media(max-width:420px){.top{gap:9px;padding-inline:12px}.brand-logo{width:38px;height:38px}.brand-title strong{font-size:12px}.brand-title span,.home-link{font-size:11px}.app{padding-inline:10px}.side{padding:15px}}
