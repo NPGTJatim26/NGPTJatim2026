@@ -65,6 +65,7 @@ async function readPoints(buf, prog, R) {
   if (!pts.length) throw new Error('TS: tidak ada geometri titik di shapefile.');
   const hasKec = rows.cols.has('WADMKC') && pts.some(p => p.WADMKC);
   if (!hasKec) pts.forEach(p => { p.WADMKC = kecOfPoint(R, p._lon, p._lat) || 'Di luar wilayah' });
+  else { const kn = new Map(); R.forEach(r => { if (r.WADMKC && r.WADMKC !== '-') kn.set(nk(r.WADMKC), r.WADMKC) }); pts.forEach(p => { p.WADMKC = kn.get(nk(p.WADMKC)) || p.WADMKC }) }
   // tanggal survei (opsional, kolom apa pun yang namanya mengandung TGL/TANGGAL/DATE/WAKTU)
   const dk = [...rows.cols].find(c => /TGL|TANGGAL|DATE|WAKTU|SURVEY/i.test(c));
   let d0 = null, d1 = null;
@@ -381,7 +382,10 @@ function renderMap(rows, colorOf, legend, opt = {}) {
       kecs.forEach((rs, k) => { const b = bboxAll(rs), [lx, ly] = P([(b[0] + b[1]) / 2, (b[2] + b[3]) / 2]); x.strokeStyle = B ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)'; x.lineWidth = 3.5; x.strokeText(k, lx, ly); x.fillStyle = B ? '#fff' : '#10243a'; x.fillText(k, lx, ly) })
     }
   }
-  if (opt.pts) opt.pts.forEach(q => { const [px, py] = P([q._lon, q._lat]); x.beginPath(); x.arc(px, py, opt.pr || 6, 0, 7); x.fillStyle = opt.pc || '#e53e3e'; x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke() });
+  if (opt.pts) opt.pts.forEach((q, i) => {
+    const [px, py] = P([q._lon, q._lat]); x.beginPath(); x.arc(px, py, opt.pr || 6, 0, 7); x.fillStyle = opt.pc || '#e53e3e'; x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke();
+    if (opt.ptLabel) { const t = String(i + 1); x.font = `bold ${t.length > 2 ? 10 : 14}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#fff'; x.fillText(t, px, py + .5); x.textBaseline = 'alphabetic' }
+  });
   // utara
   x.fillStyle = B ? '#fff' : '#10243a'; x.strokeStyle = B ? '#000' : '#fff'; x.lineWidth = 3; x.font = 'bold 22px sans-serif'; x.textAlign = 'center'; x.strokeText('U', 40, 40); x.fillText('U', 40, 40);
   x.beginPath(); x.moveTo(40, 48); x.lineTo(30, 78); x.lineTo(40, 70); x.lineTo(50, 78); x.closePath(); x.stroke(); x.fill();

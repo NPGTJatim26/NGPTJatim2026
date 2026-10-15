@@ -39,6 +39,7 @@ const OUTLINE = ['1. PENGUMPULAN DATA', '2. SURVEI LAPANGAN', '3. PENGGUNAAN TAN
 const NF0 = n => Math.round(+n || 0).toLocaleString('id-ID');
 const parsePop = v => { const s = String(v ?? '').replace(/[^\d,.]/g, ''); if (!s) return 0; const n = parseFloat(s.replace(/\./g, '').replace(',', '.')); return isFinite(n) ? n : 0 };
 const SGN = n => (n >= 0 ? '+' : '') + NF(n);
+const SGNP = n => (n >= 0 ? '+' : '') + PC(n);
 const shortN = (s, n = 48) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 // "Tersedia untuk Kawasan X sesuai tata ruang" -> kawasan X
 const cleanArahan = k => String(k || '').replace(/^Tersedia untuk\s+/i, '').replace(/\s+(sesuai tata ruang|dalam rangka (optimalisasi|penyesuaian) penggunaan tanah|dalam rangka optimalisasi pengunaan tanah)\s*$/i, '').replace(/^penyesuaian penggunaan tanah di\s+/i, '').trim().replace(/^./, c => c.toUpperCase());
@@ -58,6 +59,25 @@ function sosekRecalc(s) {
       (k.hat != null ? `\n○  Lahan ${NF(k.hat)} Ha yang "Ada HAT" (Hak Atas Tanah) (${PC(k.hatP)})` : '');
     t.text = text }
   return { cells, text };
+}
+
+// Slide Laju Perubahan: tahun lama diisi manual (kotak kuning) -> Selisih Tahun dan Laju per Tahun terhitung otomatis.
+// ri = null: semua baris ikut kotak tahun lama; ri = nomor baris: hanya baris itu dihitung ulang.
+const LAJU_YR = /lama\D*?((?:19|20)\d{2})/i;
+function lajuRecalc(s, ri) {
+  const m = s.meta; if (!m || m.kind !== 'laju') return { cells: [] };
+  const el = s.els.find(e => e.fx === 'laju'), box = s.els.find(e => e.fx === 'lajuYear'); if (!el) return { cells: [] };
+  const cells = [], set = (r, c, v) => { if (el.rows[r][c] !== v) { el.rows[r][c] = v; cells.push([r, c, v]) } };
+  if (ri == null) {
+    const yr = box && (String(box.text).match(LAJU_YR) || [])[1], dy = yr ? m.tahunBaru - +yr : 0;
+    m.rows.forEach((_, r) => set(r, m.dyCol, dy > 0 ? String(dy) : '-'))
+  }
+  m.rows.forEach((x, r) => {
+    if (ri != null && r !== ri) return;
+    const dy = parseFloat(String(el.rows[r][m.dyCol]).replace(',', '.'));
+    set(r, m.vpCol, x.v != null && isFinite(dy) && dy > 0 ? SGNP(x.v / dy) : '-')
+  });
+  return { cells };
 }
 
 // ---------- Susun slide ----------
@@ -108,7 +128,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     const ft = fitTable(40, y + 190, 540, 150, ['No', headLabel, 'Luas (Ha)', '%'], rows, { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, tot: 1, maxP: 1 });
     s.els.push(...ft.els); return ft.bottom;
   }
-  const simpleTable = (x, y, w, H, head, items, rowf, o = {}) => { const rows = items.map((i, n) => [String(n + 1), ...rowf(i, n)]); if (o.tot) rows.push(o.tot); return fitTable(x, y, w, H, ['No', ...head], rows, { cw: o.cw, num: o.num, sz: o.sz || 12, rh: o.rh || 26, tot: !!o.tot, maxP: o.maxP || 1, bold: o.bold }) };
+  const simpleTable = (x, y, w, H, head, items, rowf, o = {}) => { const rows = items.map((i, n) => [String(n + 1), ...rowf(i, n)]); if (o.tot) rows.push(o.tot); return fitTable(x, y, w, H, ['No', ...head], rows, { cw: o.cw, num: o.num, sz: o.sz || 12, rh: o.rh || 26, tot: !!o.tot, maxP: o.maxP || 1, bold: o.bold, fx: o.fx }) };
 
   // ===== 1. Sampul =====
   S.push({ bg: 'cover', els: [
@@ -122,6 +142,19 @@ function buildSlides(R, pages, nama, ctx = {}) {
   // ===== 3. Pengumpulan Data (diisi manual; sengaja dikosongkan) =====
   S.push(content('PENGUMPULAN DATA'));
 
+  // ===== 4. Peta Kecamatan & Overview Wilayah =====
+  S.push(guard('PETA KECAMATAN DAN OVERVIEW WILAYAH', 'Peta Kecamatan & Overview Wilayah', ['WADMKC'], () => {
+    const s = content('PETA KECAMATAN DAN OVERVIEW WILAYAH'), kc = group(R, r => r.WADMKC, r => r.WADMKC !== '-'), N = kc.length, prov = (R.find(r => r.WADMPR) || {}).WADMPR || 'Jawa Timur';
+    const ov = [`${nama}, Provinsi ${prov}`, `Luas wilayah ${NF(TOT)} Ha (${NF(TOT / 100)} km²)`];
+    if (N) { ov.push(`Terdiri dari ${N} kecamatan`, `Kecamatan terluas: ${kc[0].k} (${NF(kc[0].v)} Ha; ${PC(kc[0].p)})`); if (N > 1) ov.push(`Kecamatan tersempit: ${kc[N - 1].k} (${NF(kc[N - 1].v)} Ha; ${PC(kc[N - 1].p)})`) }
+    s.els.push(sub(40, 84, 540, 'Overview Wilayah'), tx(40, 118, 540, 112, ov.map(l => '○  ' + l).join('\n'), { sz: 13 }),
+      sub(40, 236, 540, 'Batas Wilayah (isi manual)'), tx(40, 270, 540, 96, ['Utara', 'Timur', 'Selatan', 'Barat'].map(a => `○  Sebelah ${a}: [isi]`).join('\n'), { sz: 13 }),
+      sub(40, 372, 540, 'Luas Wilayah per Kecamatan'));
+    if (N) { const ft = simpleTable(40, 406, 540, 660 - 406, ['Kecamatan', 'Luas (Ha)', '%'], kc, i => [i.k, NF(i.v), PC(i.p)], { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, tot: ['', 'Jumlah', NF(total(kc)), '100,00%'] }); s.els.push(...ft.els) }
+    else s.els.push(tx(40, 410, 540, 40, '[Kolom kecamatan (WADMKC) tidak terisi di shapefile]', { sz: 13 }));
+    s.els.push(mapEl(catMap(R, r => r.WADMKC, 30, { ...mapOpt, lw: 330 }))); return s
+  }));
+
   // ===== 4. Survei Lapangan (TS.zip) =====
   { const s = content('SURVEI LAPANGAN');
     if (!ts) { skip.push('Survei Lapangan (TS.zip belum diunggah)'); s.els.push(tx(60, 300, 1160, 80, '[Unggah TS.zip (titik survei) untuk mengisi slide ini, atau isi manual]', { sz: 20, al: 'center' })) }
@@ -131,33 +164,58 @@ function buildSlides(R, pages, nama, ctx = {}) {
       s.els.push(sub(40, 84, 540, `Titik Survei Lapangan: ${NF0(N)} Lokasi`), { t: 'bar', x: 40, y: 118, w: 540, h: ch, items: top(it, 10), fmt: 'int' });
       const ft = simpleTable(40, 118 + ch + 10, 540, 665 - (118 + ch + 10), ['Kecamatan', 'Jumlah Titik', '%'], it, i => [i.k, NF0(i.v), PC(pctOf(i.v, N))], { cw: [.08, .5, .24, .18], num: [2, 3], tot: ['', 'Jumlah', NF0(N), '100,00%'] });
       s.els.push(...ft.els, sub(590, 84, 650, ts.dates ? `Pelaksanaan Survei: ${fd(ts.dates[0])}${ts.dates[0].getTime() !== ts.dates[1].getTime() ? ' - ' + fd(ts.dates[1]) : ''}` : 'Peta Sebaran Titik Survei'),
-        { t: 'img', x: 590, y: 118, w: 650, h: 541, src: renderMap(R, () => '#e8edf3', [{ k: 'Titik Survei', c: '#e53e3e' }], { w: 1000, h: 832, lw: 260, pts: ts, pr: 7, parcels: false }) });
+        { t: 'img', x: 590, y: 118, w: 650, h: 541, src: renderMap(R, () => '#e8edf3', [{ k: 'Titik Survei (nomor titik)', c: '#e53e3e' }], { w: 1000, h: 832, lw: 260, pts: ts, pr: 12, ptLabel: true, parcels: false }) });
     }
     S.push(s) }
 
   // ===== 5 & 6. Penggunaan Tanah Lama / Baru =====
-  const useSlide = (title, fld, label, hint) => guard(title, label, [fld], () => {
+  const useSlide = (title, fld, label, hint, extra, colHead = 'Penggunaan Tanah') => guard(title, label, [fld], () => {
     const g = group(R, r => r[fld]), items = top(g, 14), rest = g.slice(14), s = content(title);
     if (rest.length) items.push({ k: `Lainnya (${rest.length} jenis)`, v: total(rest), p: pctOf(total(rest), total(g)) });
     const rows = items.map((i, n) => [String(n + 1), i.k, NF(i.v), PC(i.p)]); rows.push(['', 'Jumlah', NF(total(g)), '100,00%']);
-    const ft = fitTable(40, 118, 540, 470, ['No', 'Penggunaan Tanah', 'Luas (Ha)', '%'], rows, { cw: [.08, .52, .22, .18], num: [2, 3], sz: 12, rh: 28, tot: 1, maxP: 1 });
-    s.els.push(sub(40, 84, 540, `Luas ${label} (Ha)`), ...ft.els, tx(40, Math.min(ft.bottom + 10, 625), 540, 45, g[0] ? `${hint} terluas adalah ${g[0].k} seluas ${NF(g[0].v)} Ha (${PC(g[0].p)}).` : '', { sz: 12 }), mapEl(catMap(R, r => r[fld], 14, mapOpt)));
+    const ft = fitTable(40, 118, 540, 470, ['No', colHead, 'Luas (Ha)', '%'], rows, { cw: [.08, .52, .22, .18], num: [2, 3], sz: 12, rh: 28, tot: 1, maxP: 1 });
+    s.els.push(sub(40, 84, 540, `Luas ${label} (Ha)`), ...ft.els, tx(40, Math.min(ft.bottom + 10, 615), 540, 50, g[0] ? `${hint} terluas adalah ${g[0].k} seluas ${NF(g[0].v)} Ha (${PC(g[0].p)}).${extra ? extra() : ''}` : '', { sz: 12 }), mapEl(catMap(R, r => r[fld], 14, mapOpt)));
     return s });
   S.push(useSlide('PENGGUNAAN TANAH LAMA', 'GNAME25', 'Penggunaan Tanah Lama', 'Penggunaan tanah lama'));
   S.push(useSlide('PENGGUNAAN TANAH BARU', 'QNAME25', 'Penggunaan Tanah Baru', 'Penggunaan tanah baru'));
+  // ===== RTRW: rencana pola ruang (NAMOBJ) + kawasan lindung/budi daya (WREKLAS) =====
+  S.push(useSlide('RENCANA TATA RUANG WILAYAH (RTRW) - POLA RUANG', 'NAMOBJ', 'Rencana Pola Ruang', 'Rencana pola ruang',
+    () => { if (!has('WREKLAS')) return ''; const w = group(R, r => r.WREKLAS); return w.length ? ' ' + w.map(x => `${x.k} ${NF(x.v)} Ha (${PC(x.p)})`).join('; ') + '.' : '' }, 'Rencana Pola Ruang'));
 
   // ===== 7 & 8. Analisis Perubahan =====
   const chg = group(R, r => r.GQREKLAS), vChg = chg.find(x => x.k === 'Berubah')?.v || 0, chgT = group(R, r => r.GQNAME, berubah);
-  const mapBerubah = () => fixedMap(R, r => r.GQREKLAS, CB, mapOpt);
+  let _mb = null; const mapBerubah = () => _mb || (_mb = fixedMap(R, r => r.GQREKLAS, CB, mapOpt));
   S.push(guard('ANALISIS PERUBAHAN PENGGUNAAN TANAH', 'Analisis Perubahan (1)', ['GQREKLAS'], () => {
     const s = content('ANALISIS PERUBAHAN PENGGUNAAN TANAH');
     const y = pieBlock(s, 84, 'A. Luas dan Persentase Perubahan Penggunaan Tanah', chg, CB, 'Keterangan Perubahan');
-    if (has('GREKLAS', 'QREKLAS')) { const cl = new Map(); R.forEach(r => { if (!berubah(r)) return; const a = cl.get(r.GREKLAS) || [0, 0], b = cl.get(r.QREKLAS) || [0, 0]; a[0] += r.LUASHA; b[1] += r.LUASHA; cl.set(r.GREKLAS, a); cl.set(r.QREKLAS, b) });
-      const it = [...cl].filter(([k]) => k).map(([k, [l, b]]) => ({ k, l, b, d: b - l })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
-      s.els.push(sub(40, y + 10, 540, 'Laju Perubahan Penggunaan Tanah Reklasifikasi (Ha)'));
-      const ft = simpleTable(40, y + 44, 540, 660 - (y + 44), ['Reklasifikasi', 'Lama (Ha)', 'Baru (Ha)', 'Selisih (Ha)'], it, i => [i.k, NF(i.l), NF(i.b), SGN(i.d)], { cw: [.07, .35, .19, .19, .2], num: [2, 3, 4], sz: 11, rh: 24 }); s.els.push(...ft.els) }
+    if (has('GREKLAS', 'QREKLAS')) {
+      // Luas lama/baru = total seluruh poligon pada kelas tsb (bukan hanya yang berubah), agar V = selisih / luas tahun lama x 100 bermakna.
+      const cl = new Map(), bump = (k, i, v) => { if (!k) return; const a = cl.get(k) || [0, 0]; a[i] += v; cl.set(k, a) };
+      R.forEach(r => { bump(r.GREKLAS, 0, r.LUASHA); bump(r.QREKLAS, 1, r.LUASHA) });
+      const it = [...cl].map(([k, [l, b]]) => ({ k, l, b, d: b - l, v: l ? (b - l) / l * 100 : null })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+      s.els.push(sub(40, y + 10, 540, 'Laju Perubahan Penggunaan Tanah Reklasifikasi'),
+        tx(40, y + 44, 540, 26, 'Selisih tahun = ' + tahun + ' - tahun data lama: [isi tahun]', { sz: 12, b: 1, fill: '#fff3c4', v: 'middle', fx: 'lajuYear' }));
+      const ft = simpleTable(40, y + 76, 540, 640 - (y + 76), ['Reklasifikasi', 'Lama (Ha)', 'Baru (Ha)', 'Selisih (Ha)', 'Laju Perubahan (V) %', 'Selisih Tahun', 'Laju per Tahun (%)'], it,
+        i => [i.k, NF(i.l), NF(i.b), SGN(i.d), i.v == null ? '-' : SGNP(i.v), '-', '-'], { cw: [.06, .25, .11, .11, .11, .12, .1, .14], num: [2, 3, 4, 5, 6, 7], sz: 11, rh: 24, fx: 'laju' });
+      s.els.push(...ft.els, tx(40, Math.min(ft.bottom + 6, 640), 540, 30, 'V = (Selisih / Luas tahun lama) x 100.  Laju per tahun = V / Selisih tahun.  Isi tahun lama pada kotak kuning, kolom Selisih Tahun & Laju per Tahun terhitung otomatis.', { sz: 10 }));
+      s.meta = { kind: 'laju', dyCol: 6, vpCol: 7, tahunBaru: +tahun, rows: it.map(i => ({ k: i.k, v: i.v })) }; lajuRecalc(s)
+    }
     else s.els.push(tx(40, y + 14, 540, 40, `Tanah yang berubah penggunaannya seluas ${NF(vChg)} Ha (${PC(pctOf(vChg, TOT))}) dari total ${NF(TOT)} Ha.`, { sz: 13 }));
     s.els.push(mapEl(mapBerubah())); return s }));
+  // ===== Perubahan penggunaan tanah (GQREKLAS = Berubah) per kecamatan, tertinggi -> terendah =====
+  S.push(guard('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN', 'Perubahan per Kecamatan', ['GQREKLAS', 'WADMKC'], () => {
+    const s = content('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN'), kl = group(R, r => r.WADMKC, r => r.WADMKC !== '-');
+    const it = kl.map(x => ({ k: x.k, L: x.v, v: sumBy(R, 'LUASHA', r => r.WADMKC === x.k && berubah(r)) })).sort((a, b) => b.v - a.v), T = it.reduce((a, i) => a + i.v, 0);
+    it.forEach(i => { i.pL = pctOf(i.v, i.L); i.pT = pctOf(i.v, T) });
+    if (!it.length) { s.els.push(tx(60, 300, 1160, 80, '[Kolom kecamatan (WADMKC) tidak terisi di shapefile]', { sz: 20, al: 'center' })); return s }
+    const nb = Math.min(it.length, 8), ch = Math.min(230, nb * 28 + 14);
+    s.els.push(sub(40, 84, 540, 'Perubahan Penggunaan Tanah Tertinggi - Terendah per Kecamatan (Ha)'), { t: 'bar', x: 40, y: 118, w: 540, h: ch, items: it.slice(0, nb).map(i => ({ k: i.k, v: +i.v.toFixed(2) })) });
+    const ft = simpleTable(40, 118 + ch + 10, 540, 600 - (118 + ch + 10), ['Kecamatan', 'Luas Kec. (Ha)', 'Berubah (Ha)', '% thd Luas Kec.', '% thd Total Perubahan'], it, i => [i.k, NF(i.L), NF(i.v), PC(i.pL), PC(i.pT)],
+      { cw: [.06, .24, .17, .16, .17, .2], num: [2, 3, 4, 5], sz: 11, rh: 26, tot: ['', 'Jumlah', NF(total(kl)), NF(T), PC(pctOf(T, total(kl))), '100,00%'] });
+    const hi = it[0], lo = it[it.length - 1];
+    s.els.push(...ft.els, tx(40, Math.min(ft.bottom + 8, 625), 540, 50, T ? `Perubahan tertinggi di Kecamatan ${hi.k} seluas ${NF(hi.v)} Ha (${PC(hi.pT)} dari total perubahan).` + (it.length > 1 ? ` Terendah di Kecamatan ${lo.k} seluas ${NF(lo.v)} Ha (${PC(lo.pT)}).` : '') : 'Tidak terdapat perubahan penggunaan tanah.', { sz: 12 }));
+    s.els.push(mapEl(mapBerubah())); return s
+  }));
   S.push(guard('ANALISIS PERUBAHAN PENGGUNAAN TANAH', 'Analisis Perubahan (2)', ['GQREKLAS', 'GQNAME', 'QNAME25', 'GNAME25'], () => {
     const s = content('ANALISIS PERUBAHAN PENGGUNAAN TANAH'), t10 = top(chgT, 10);
     s.els.push(sub(40, 84, 760, 'D. Presentase Tertinggi Perubahan Penggunaan Tanah (% dari Total Perubahan)'), { t: 'bar', x: 40, y: 118, w: 760, h: Math.max(60, t10.length * 30), items: t10.map(i => ({ k: i.k, v: +i.p.toFixed(2) })), fmt: 'pct', lwf: .56, trunc: 62 });

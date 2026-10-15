@@ -130,7 +130,13 @@
       r.cells.forEach(([ri, ci, v]) => { const td = stage.querySelector(`[data-i="${n.dataset.i}"][data-r="${ri}"][data-c="${ci}"]`); if (td && td !== e.target) td.textContent = v });
       const ti = deck[cur].els.findIndex(x => x.fx === 'sosekText'), tn = ti >= 0 && stage.querySelector(`.el[data-i="${ti}"]`); if (tn && r.text != null) tn.textContent = r.text;
     }
-    later();
+    // Slide Laju Perubahan: isi tahun lama (kotak kuning) atau Selisih Tahun per baris -> Laju per Tahun terhitung otomatis
+    const sl = deck[cur], ti = sl.els.findIndex(x => x.fx === 'laju');
+    if (sl.meta && sl.meta.kind === 'laju' && ti >= 0 && ((el.t === 'text' && el.fx === 'lajuYear') || (el.t === 'table' && el.fx === 'laju' && +e.target.dataset.c === sl.meta.dyCol && +e.target.dataset.r >= 0))) {
+      const r = lajuRecalc(sl, el.t === 'table' ? +e.target.dataset.r : null);
+      r.cells.forEach(([ri, ci, v]) => { const td = stage.querySelector(`[data-i="${ti}"][data-r="${ri}"][data-c="${ci}"]`); if (td && td !== e.target) td.textContent = v });
+    }
+    later();GIY
   });
   const mark = () => { stage.querySelectorAll('.el').forEach(n => n.classList.toggle('sel', +n.dataset.i === sel)); placeHandles() };
   // Pegangan elemen terpilih: ✥ (pindah) di atas-kiri, kotak di pojok kanan-bawah (ubah ukuran).
