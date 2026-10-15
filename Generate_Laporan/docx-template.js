@@ -203,7 +203,7 @@ const tblKey=t=>{
 };
 const TBLS={
   'T3.2':{k:'III-1',pick:[0,1,2,3]},'T3.3':{k:'III-1',pick:[0,1,4,5,6]},'T3.4':{k:'III-2'},'T3.5':{k:'III-3'},'T3.6':{k:'III-4'},'T3.7':{k:'III-5'},
-  'T3.8':{k:'III-6'},'T3.9':{k:'III-7'},'T3.10':{k:'III-8'},'T3.11':{k:'III-10'},
+  'T3.8':{k:'III-6'},'T3.9':{k:'III-7'},'T3.10':{k:'III-8'},'T3.11':{k:'III-10'},'T3.12':{k:'III-11'},
   'TIV1':{k:'IV-1'},'TIV2':{k:'IV-2'},'TIV3':{k:'IV-3'},'TIV4':{k:'IV-4'},'TIV5':{k:'IV-5'},'TIV6':{k:'IV-6'},'TIV7':{k:'IV-7'},'TIV8':{k:'IV-8'},
   'TIV9':{k:'IV-9'},'TIV10':{k:'IV-10'},'TIV11':{k:'IV-11'},'TIV12':{k:'IV-12'},'TIV14':{k:'IV-14'},'TIV15':{k:'IV-15'},'TIV16':{k:'IV-16'},'TIV17':{k:'IV-17'},'TIV18':{k:'IV-18'}
 };
@@ -242,6 +242,41 @@ async function generateNpgtDocx(opt){
   // 2. Tabel
   say('Mengisi tabel dari rekap…');
   const{M}=C.d;
+  const forest=M('III-11');
+  if(forest){
+    const text=K.filter(n=>isW(n,'p')).map(ptext);
+    const needTable=!text.some(t=>/^Tabel\s*3\.\s*12\b/.test(t.trim()));
+    const needFigure=!text.some(t=>/^Gambar\s*3\.\s*6\b/.test(t.trim()));
+    if(needTable||needFigure){
+      const headingAt=K.findIndex(n=>isW(n,'p')&&/^Kawasan Hutan\s*$/i.test(ptext(n).trim()));
+      const narrativeAt=K.findIndex((n,i)=>i>headingAt&&isW(n,'p')&&ptext(n).trim());
+      if(headingAt<0||narrativeAt<0)throw new Error('Judul atau uraian Kawasan Hutan tidak ditemukan pada template');
+      const tableCaption=K.find(n=>isW(n,'p')&&/^Tabel\s*3\.\s*11\b/.test(ptext(n).trim()));
+      const figureCaption=K.find(n=>isW(n,'p')&&/^Gambar\s*3\.\s*5\b/.test(ptext(n).trim()));
+      const tableTemplate=K.find(n=>isW(n,'tbl'));
+      const sourceTemplate=K.find(n=>isW(n,'p')&&/^Sumber\s*:/.test(ptext(n).trim()));
+      if(needTable&&(!tableCaption||!tableTemplate||!sourceTemplate))throw new Error('Format tabel pada template tidak tersedia untuk menambahkan Kawasan Hutan');
+      if(needFigure&&!figureCaption)throw new Error('Format caption diagram pada template tidak tersedia untuk menambahkan Kawasan Hutan');
+      const added=[];
+      if(needTable){
+        const caption=tableCaption.cloneNode(true);
+        setParaText(caption,`Tabel 3. 12 Kawasan Hutan ${W} Tahun ${C.y1} per Kecamatan`);
+        const source=sourceTemplate.cloneNode(true);
+        setParaText(source,'Sumber : Tabel III-11');
+        added.push(caption,tableTemplate.cloneNode(true),source);
+      }
+      if(needFigure){
+        const drawing=frag('<w:p><w:r><w:drawing/></w:r></w:p>')[0];
+        const caption=figureCaption.cloneNode(true);
+        setParaText(caption,`Gambar 3. 6 Kawasan Hutan ${W} Tahun ${C.y1}`);
+        added.push(drawing,caption);
+      }
+      const anchor=K[narrativeAt+1];
+      if(!anchor)throw new Error('Lokasi penyisipan setelah uraian Kawasan Hutan tidak ditemukan');
+      added.forEach(n=>body.insertBefore(n,anchor));
+      K.splice(narrativeAt+1,0,...added);
+    }
+  }
   K.forEach((n,i)=>{
     if(!isW(n,'tbl'))return;
     let key=null;

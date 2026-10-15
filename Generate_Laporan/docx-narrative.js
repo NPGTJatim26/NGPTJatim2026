@@ -352,6 +352,7 @@ function makeFigs(C){
     '3.3':()=>{const t=M('III-7'),w=t.head[0].length,r=top5(t,w);return{lb:r.map(x=>x[1]),vs:r.map(x=>x[w-2]),u:' Ha',key:'baru'}},
     '3.4':()=>{const t=M('III-8'),w=t.head[0].length,r=srt(D(t),w-2).slice(0,6);return{lb:r.map(x=>x[1]),vs:r.map(x=>x[w-2]),u:' Ha',key:'gupt'}},
     '3.5':()=>{const t=M('III-10'),w=t.head[0].length,r=top5(t,w);return{lb:r.map(x=>x[1]),vs:r.map(x=>x[w-2]),u:' Ha',key:'rtr'}},
+    '3.6':()=>{const t=M('III-11'),w=t.head[0].length,r=D(t);return{lb:r.map(x=>x[1]),vs:r.map(x=>x[w-2]),u:' Ha',key:'hutan'}},
     'IV1':()=>{const r=D(M('IV-1'));return{lb:r.map(x=>x[1]),vs:r.map(x=>x[2]),u:' Ha',key:'ubah'}},
     'IV2':()=>{const m3=M('IV-3'),nm=m3.head[1].slice(2),tr=[];D(m3).forEach(r=>nm.forEach((n,j)=>{const v=r[2+j];if(N(v)&&v>.005&&n&&r[1]!==n)tr.push([r[1],n,v])}));tr.sort((a,b)=>b[2]-a[2]);const t5=tr.slice(0,5);return{lb:t5.map(x=>`${x[0]} → ${x[1]}`),vs:t5.map(x=>x[2]),u:' Ha',key:'dom'}},
     'IV4':()=>{const r=D(M('IV-5'));return{lb:r.map(x=>x[1]),vs:r.map(x=>x[4]),u:' Ha',key:'reklas'}},

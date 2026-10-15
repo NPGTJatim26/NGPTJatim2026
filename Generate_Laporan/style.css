@@ -10,9 +10,17 @@ body{margin:0;min-height:100vh;background:radial-gradient(700px 360px at 50% -10
 .th{width:36px;height:36px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);display:grid;place-items:center;cursor:pointer}
 .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .th .sun{display:none}[data-theme=dark] .th .sun{display:block}[data-theme=dark] .th .moon{display:none}
-.app{display:grid;grid-template-columns:minmax(0,760px);justify-content:center;max-width:1560px;margin:0 auto;padding:24px clamp(16px,3vw,36px) 40px;align-items:start}
+.app{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:20px;max-width:1560px;margin:0 auto;padding:24px clamp(16px,3vw,36px) 40px;align-items:start}
 .side{min-width:0;background:var(--card);border:1px solid var(--bd);border-radius:10px}
 .side{padding:22px;position:sticky;top:16px}
+.advisory{min-width:0;padding:22px;background:var(--card);border:1px solid var(--bd);border-radius:10px}
+.advisory h2{margin:6px 0 10px;font-size:18px;line-height:1.35}
+.advisory h3{margin:18px 0 6px;font-size:14px;line-height:1.4}
+.advisory p,.advisory li{font-size:13px;line-height:1.65}
+.advisory p{margin:0;color:var(--mu)}
+.advisory ul{margin:0;padding-left:22px}
+.advisory li+li{margin-top:8px}
+.advisory strong{color:var(--tx)}
 .panel-heading{padding-bottom:18px;border-bottom:1px solid var(--bd)}
 .eyebrow{color:var(--ac)}
 .panel-heading h1{font-size:21px;line-height:1.25;margin:6px 0 8px;letter-spacing:0}
@@ -30,6 +38,5 @@ button{font:inherit;cursor:pointer}.actions button{min-height:40px;padding:9px 1
 #st{font-size:12px;margin-top:10px;white-space:pre-wrap;min-height:18px}
 .note{margin:12px 0 0;padding-top:12px;border-top:1px solid var(--bd);color:var(--mu);font-size:11px;line-height:1.6}
 .fill-sample{background:#fff3a0;color:#111;padding:0 3px}
-@media(max-width:900px){.app{padding-inline:16px}.side{padding:17px}}
-@media(max-width:720px){.app{grid-template-columns:1fr;padding-top:14px}.side{position:static}}
-@media(max-width:420px){.top{gap:9px;padding-inline:12px}.brand-logo{width:38px;height:38px}.brand-title strong{font-size:12px}.brand-title span,.home-link{font-size:11px}.app{padding-inline:10px}.side{padding:15px}}
+@media(max-width:900px){.app{grid-template-columns:1fr;padding:14px 16px 32px}.side{position:static}.side,.advisory{padding:17px}}
+@media(max-width:420px){.top{gap:9px;padding-inline:12px}.brand-logo{width:38px;height:38px}.brand-title strong{font-size:12px}.brand-title span,.home-link{font-size:11px}.app{padding-inline:10px}.side,.advisory{padding:15px}}
