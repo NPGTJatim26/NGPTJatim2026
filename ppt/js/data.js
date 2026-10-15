@@ -160,7 +160,7 @@ function symPaints(name) {
 }
 
 // ============ Muat simbologi langsung dari frontend/assets/simbologi.stylx ============
-const STYLX_URL = '../frontend/assets/simbologi.stylx';
+const STYLX_URL = '../frontend/assets/simbols.stylx';
 const _hx = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
 function stylxCol(c) {
   if (!c || !Array.isArray(c.values) || c.values.length < 3) return null;
@@ -205,10 +205,12 @@ function loadSimbologi() {
   return _stylxP = (async () => {
     const SQL = await initSqlJs({ locateFile: f => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/' + f });
     const r = await fetch(STYLX_URL); if (!r.ok) throw new Error('simbologi.stylx tidak ditemukan (HTTP ' + r.status + ')');
-    const db = new SQL.Database(new Uint8Array(await r.arrayBuffer())), res = db.exec('SELECT NAME, CONTENT FROM ITEMS'); db.close();
-    const out = {};
-    for (const [name, c] of (res[0] ? res[0].values : [])) {
-      let spec; try { spec = stylxSpec(JSON.parse((typeof c === 'string' ? c : new TextDecoder().decode(c)).replace(/\0+$/, ''))) } catch (e) { continue }
+    const db = new SQL.Database(new Uint8Array(await r.arrayBuffer())), res = db.exec('SELECT NAME, CONTENT, CLASS FROM ITEMS'); db.close();
+    const out = {}, outL = {};
+    for (const [name, c, cls] of (res[0] ? res[0].values : [])) {
+      let j; try { j = JSON.parse((typeof c === 'string' ? c : new TextDecoder().decode(c)).replace(/\0+$/, '')) } catch (e) { continue }
+      if (cls === 4 || /Line/.test(j.type || '')) { const ls = lineSpec(j); if (ls) outL[name] = ls; continue }
+      let spec; try { spec = stylxSpec(j) } catch (e) { continue }
       if (spec._pic) { try { const p = await stylxBmpToPng(spec._pic.url, spec._pic.subst); spec.pic = { src: p.src, px: p.size[0], h: spec._pic.h || p.size[1], step: spec._pic.step } } catch (e) { console.warn('Simbol gambar dilewati:', name, e) } }
       delete spec._pic;
       spec.rep = (spec.hatch[0] && spec.hatch[0].c) || spec.fill || (spec.stroke && spec.stroke.c) || (spec.mk && spec.mk.c) || (spec.pic ? '#666666' : '#999999');
@@ -217,8 +219,95 @@ function loadSimbologi() {
     Object.keys(SYMDEF).forEach(k => delete SYMDEF[k]); Object.assign(SYMDEF, out);
     Object.keys(SYMIDX).forEach(k => delete SYMIDX[k]); Object.keys(SYMDEF).forEach(n => SYMIDX[symKey(n)] = n);
     SYMPAT.clear(); SYMPIC.clear();
+    Object.keys(SYMLINE).forEach(k => delete SYMLINE[k]); Object.assign(SYMLINE, outL);
+    if (!Object.keys(SYMDEF).length && !Object.keys(SYMLINE).length) throw new Error('file .stylx tidak berisi simbol (tabel ITEMS kosong)');
     return Object.keys(SYMDEF).length;
   })().catch(e => { _stylxP = null; throw e });
+}
+
+// ===== Simbol garis (CLASS 4 di .stylx): WADMKK = batas kab/kota, WADMKC = batas kecamatan =====
+const SYMLINE = {};              // nama -> { layers:[{c,w,dash,cap}] }  (urut: bawah -> atas)
+const PT = 1.5, DASH_K = 1;      // piksel kanvas per pt ArcGIS; pengali panjang dash
+function lineSpec(j) {
+  const layers = [];
+  for (const l of j.symbolLayers || []) {
+    if (l.enable === false || l.type !== 'CIMSolidStroke') continue;
+    const d = (l.effects || []).find(e => /Dash/.test(e.type || ''));
+    layers.push({ c: stylxCol(l.color) || '#000000', w: l.width ?? 1, dash: d ? d.dashTemplate : null, cap: /round/i.test(l.capStyle || '') ? 'round' : 'butt' });
+  }
+  return layers.length ? { layers: layers.reverse() } : null;   // di CIM layer pertama = paling atas
+}
+function lineSym(name, fallback) {
+  const k = symKey(name), n = Object.keys(SYMLINE).find(z => symKey(z) === k);
+  return n ? SYMLINE[n].layers : fallback;
+}
+
+// Peta label sel (kecamatan ke-i = i+1, 0 = kosong) -> sisi sel yang berbeda label.
+// kab = berbatasan dengan kosong (tepi luar); kec = antar dua kecamatan (tiap sisi sekali, tanpa dobel).
+function labelEdges(lab, gw, gh) {
+  const kab = [], kec = [];
+  for (let y = 0; y < gh; y++) for (let x = 0; x <= gw; x++) {
+    const a = x > 0 ? lab[y * gw + x - 1] : 0, b = x < gw ? lab[y * gw + x] : 0;
+    if (a !== b) (a && b ? kec : kab).push([x, y, x, y + 1]);
+  }
+  for (let y = 0; y <= gh; y++) for (let x = 0; x < gw; x++) {
+    const a = y > 0 ? lab[(y - 1) * gw + x] : 0, b = y < gh ? lab[y * gw + x] : 0;
+    if (a !== b) (a && b ? kec : kab).push([x, y, x + 1, y]);
+  }
+  return { kab, kec };
+}
+// Sambung potongan sisi menjadi polyline panjang (supaya pola dash menyambung).
+function linkSegs(segs, gw) {
+  const key = (x, y) => y * (gw + 1) + x, adj = new Map();
+  segs.forEach((s, i) => { for (const k of [key(s[0], s[1]), key(s[2], s[3])]) (adj.get(k) || adj.set(k, []).get(k)).push(i) });
+  const used = new Uint8Array(segs.length), lines = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (used[i]) continue; used[i] = 1;
+    const pts = [[segs[i][0], segs[i][1]], [segs[i][2], segs[i][3]]];
+    for (const fwd of [true, false]) for (; ;) {
+      const e = fwd ? pts[pts.length - 1] : pts[0], j = (adj.get(key(e[0], e[1])) || []).find(q => !used[q]);
+      if (j === undefined) break; used[j] = 1; const t = segs[j];
+      const nx = t[0] === e[0] && t[1] === e[1] ? [t[2], t[3]] : [t[0], t[1]];
+      fwd ? pts.push(nx) : pts.unshift(nx);
+    }
+    lines.push(pts);
+  }
+  return lines;
+}
+// Haluskan tangga piksel (rata-rata 1-2-1), ujung garis terbuka tetap.
+function smoothLine(pts, n = 4) {
+  const closed = pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
+  let p = closed ? pts.slice(0, -1) : pts.slice();
+  for (let it = 0; it < n && p.length > 2; it++) {
+    const m = p.length, q = p;
+    p = q.map((v, i) => (!closed && (i === 0 || i === m - 1)) ? v : (a => [(a[0][0] + 2 * v[0] + a[1][0]) / 4, (a[0][1] + 2 * v[1] + a[1][1]) / 4])([q[(i + m - 1) % m], q[(i + 1) % m]]));
+  }
+  if (closed) p.push(p[0]);
+  return p;
+}
+// Tiap grup digambar ke mask setengah resolusi (GS=2), dibaca alpha-nya jadi label sel, lalu ditelusuri.
+function traceAdmin(groups, P, W, H, GS = 2) {
+  const gw = Math.ceil(W / GS), gh = Math.ceil(H / GS), mk = document.createElement('canvas'); mk.width = gw; mk.height = gh;
+  const g = mk.getContext('2d', { willReadFrequently: true }), lab = new Uint16Array(gw * gh);
+  groups.forEach((rs, gi) => {
+    g.clearRect(0, 0, gw, gh); g.fillStyle = '#000';
+    for (const r of rs) eachRing(r._g, rings => { g.beginPath(); rings.forEach(ring => { ring.forEach((pt, i) => { const [px, py] = P(pt); i ? g.lineTo(px / GS, py / GS) : g.moveTo(px / GS, py / GS) }); g.closePath() }); g.fill('evenodd') });
+    for (let i = 0; i < 3; i++) g.drawImage(mk, 0, 0);            // pertegas tepi: celah antar-persil tertutup
+    const a = g.getImageData(0, 0, gw, gh).data;
+    for (let i = 0, n = gw * gh; i < n; i++) if (!lab[i] && a[i * 4 + 3] > 127) lab[i] = gi + 1;
+  });
+  const e = labelEdges(lab, gw, gh), fin = s => linkSegs(s, gw).map(l => smoothLine(l).map(p => [p[0] * GS, p[1] * GS]));
+  return { kab: fin(e.kab), kec: fin(e.kec) };
+}
+// Gambar polyline dengan simbol (layer bawah dulu; pola dash ArcGIS = kelipatan lebar garis).
+function strokeLines(x, lines, layers) {
+  x.save(); x.lineJoin = 'round';
+  for (const l of layers) {
+    const w = Math.max(.6, l.w * PT); x.strokeStyle = l.c; x.lineWidth = w; x.lineCap = l.cap;
+    x.setLineDash(l.dash ? l.dash.map(d => d * w * DASH_K) : []);
+    for (const ln of lines) { x.beginPath(); ln.forEach((p, i) => i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1])); x.stroke() }
+  }
+  x.restore();
 }
 
 // ============ Basemap (tile satelit) ============
@@ -283,24 +372,14 @@ function renderMap(rows, colorOf, legend, opt = {}) {
   // batas administrasi: kabupaten/kota (tebal) dan kecamatan (tipis) dengan teknik "halo" di luar poligon
   const kecs = new Map(); rows.forEach(r => { const k = r.WADMKC; if (k && k !== '-') (kecs.get(k) || kecs.set(k, []).get(k)).push(r) });
   const cKab = B ? '#ffd400' : '#0f172a', cKec = B ? '#ffffff' : '#475569';
+  const LK = lineSym('WADMKK', [{ c: cKab, w: 4, dash: null, cap: 'butt' }]), LC = lineSym('WADMKC', [{ c: cKec, w: 2.3, dash: null, cap: 'butt' }]);
   if (withAdmin) {
-    // Cincin di luar tiap grup: mask (setengah resolusi) digeser ke segala arah lalu dikurangi mask asli. Jauh lebih cepat daripada stroke ratusan ribu simpul.
-    const hw = Math.ceil(W / 2), hh = Math.ceil(H / 2), mkc = document.createElement('canvas'), rgc = document.createElement('canvas'); mkc.width = rgc.width = hw; mkc.height = rgc.height = hh;
-    const mg = mkc.getContext('2d'), rg = rgc.getContext('2d');
-    const halo = (rs, color, out) => {
-      mg.clearRect(0, 0, hw, hh); mg.fillStyle = '#000';
-      for (const r of rs) eachRing(r._g, rings => { mg.beginPath(); rings.forEach(ring => { ring.forEach((pt, i) => { const [px, py] = P(pt); i ? mg.lineTo(px / 2, py / 2) : mg.moveTo(px / 2, py / 2) }); mg.closePath() }); mg.fill('evenodd') });
-      for (let i = 0; i < 3; i++) mg.drawImage(mkc, 0, 0); // pertegas tepi agar celah antar-persil tertutup
-      rg.globalCompositeOperation = 'source-over'; rg.clearRect(0, 0, hw, hh); const R = out / 2;
-      for (const [r, n] of [[R, 12], [R * .5, 8]]) for (let i = 0; i < n; i++) { const t = i / n * Math.PI * 2; rg.drawImage(mkc, r * Math.cos(t), r * Math.sin(t)) }
-      rg.globalCompositeOperation = 'destination-out'; rg.drawImage(mkc, 0, 0); for (let i = 0; i < 8; i++) { const t = i / 8 * Math.PI * 2; rg.drawImage(mkc, .5 * Math.cos(t), .5 * Math.sin(t)) }
-      rg.globalCompositeOperation = 'source-in'; rg.fillStyle = color; rg.fillRect(0, 0, hw, hh); rg.globalCompositeOperation = 'source-over';
-      x.drawImage(rgc, 0, 0, hw, hh, 0, 0, W, H);
-    };
-    if (kecs.size > 1) kecs.forEach(rs => halo(rs, cKec, 3.5));
-    halo(rows, cKab, 6);
-    if (kecs.size > 1 && kecs.size <= 40 && opt.labels !== false) { x.font = 'bold 13px sans-serif'; x.textAlign = 'center'; x.lineJoin = 'round';
-      kecs.forEach((rs, k) => { const b = bboxAll(rs), [lx, ly] = P([(b[0] + b[1]) / 2, (b[2] + b[3]) / 2]); x.strokeStyle = B ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)'; x.lineWidth = 3.5; x.strokeText(k, lx, ly); x.fillStyle = B ? '#fff' : '#10243a'; x.fillText(k, lx, ly) }) }
+    const T = traceAdmin(kecs.size > 1 ? [...kecs.values()] : [rows], P, W, H);
+    strokeLines(x, T.kec, LC); strokeLines(x, T.kab, LK);
+    if (kecs.size > 1 && kecs.size <= 40 && opt.labels !== false) {
+      x.font = 'bold 13px sans-serif'; x.textAlign = 'center'; x.lineJoin = 'round';
+      kecs.forEach((rs, k) => { const b = bboxAll(rs), [lx, ly] = P([(b[0] + b[1]) / 2, (b[2] + b[3]) / 2]); x.strokeStyle = B ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)'; x.lineWidth = 3.5; x.strokeText(k, lx, ly); x.fillStyle = B ? '#fff' : '#10243a'; x.fillText(k, lx, ly) })
+    }
   }
   if (opt.pts) opt.pts.forEach(q => { const [px, py] = P([q._lon, q._lat]); x.beginPath(); x.arc(px, py, opt.pr || 6, 0, 7); x.fillStyle = opt.pc || '#e53e3e'; x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.stroke() });
   // utara
@@ -308,12 +387,21 @@ function renderMap(rows, colorOf, legend, opt = {}) {
   x.beginPath(); x.moveTo(40, 48); x.lineTo(30, 78); x.lineTo(40, 70); x.lineTo(50, 78); x.closePath(); x.stroke(); x.fill();
   if (B) { x.font = '11px sans-serif'; x.textAlign = 'left'; const tw = x.measureText(B.attr).width + 10; x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, H - 18, tw, 18); x.fillStyle = '#fff'; x.fillText(B.attr, 5, H - 5) }
   if (lw) {
-    const items = [...legend]; if (withAdmin) { items.push({ k: 'Batas Kabupaten/Kota', line: cKab, lw: 4 }); if (kecs.size > 1) items.push({ k: 'Batas Kecamatan', line: B ? '#fff' : cKec, lw: 2 }) }
+    const items = [...legend]; if (withAdmin) { items.push({ k: 'Batas Kabupaten/Kota', ls: LK }); if (kecs.size > 1) items.push({ k: 'Batas Kecamatan', ls: LC }) }
     const lx = W - lw - 4, rowH = 24, hh = Math.min(H - 20, items.length * rowH + 40);
     x.fillStyle = '#fff'; x.strokeStyle = '#9fb2c4'; x.lineWidth = 1; x.fillRect(lx, 10, lw, hh); x.strokeRect(lx, 10, lw, hh);
     x.textAlign = 'left'; x.font = 'bold 15px sans-serif'; x.fillStyle = '#10243a'; x.fillText('KETERANGAN', lx + 10, 32); x.font = '14px sans-serif';
     items.forEach((l, i) => { const y = 44 + i * rowH;
-      if (l.line) { x.fillStyle = B ? '#444' : '#fff'; x.fillRect(lx + 10, y + 4, 22, 6); x.fillStyle = l.line; x.fillRect(lx + 10, y + 7 - l.lw / 2, 22, l.lw) }
+      if (l.ls) {
+        x.fillStyle = '#9aa8b5'; x.fillRect(lx + 10, y + 1, 22, 12);   // latar abu agar alas putih/krem terlihat
+        x.save(); x.beginPath(); x.rect(lx + 10, y, 22, 14); x.clip();
+        l.ls.forEach(sy => {
+          const w = Math.min(Math.max(1, sy.w * PT), 6), per = sy.dash ? sy.dash.reduce((a, b) => a + b, 0) * w : 0;
+          x.strokeStyle = sy.c; x.lineWidth = w; x.lineCap = sy.cap; x.setLineDash(sy.dash ? sy.dash.map(d => d * w * 22 / per) : []);   // satu periode pola muat di 22 px
+          x.beginPath(); x.moveTo(lx + 10, y + 7); x.lineTo(lx + 32, y + 7); x.stroke()
+        });
+        x.restore(); x.setLineDash([])
+      }
       else { const p = paintFor(l.c); x.fillStyle = '#fff'; x.fillRect(lx + 10, y, 22, 14); p.fills.forEach(f => { x.fillStyle = f; x.fillRect(lx + 10, y, 22, 14) });
         if (!p.fills.length && p.stroke) { x.strokeStyle = p.stroke.c; x.lineWidth = 1.5; x.strokeRect(lx + 11, y + 1, 20, 12) } else { x.strokeStyle = '#555'; x.lineWidth = 1; x.strokeRect(lx + 10, y, 22, 14) } }
       x.fillStyle = '#10243a'; x.fillText(l.k.length > mc ? l.k.slice(0, mc - 1) + '…' : l.k, lx + 40, y + 12) });
