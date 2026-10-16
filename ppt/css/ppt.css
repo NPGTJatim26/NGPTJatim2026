@@ -1048,3 +1048,9 @@ html.guard body {
         break-after: auto
     }
 }
+/* tabel padat: dipakai otomatis bila baris banyak (mis. 18 kecamatan) */
+.sl table.tight td,
+.sl table.tight th {
+    padding: 0 5px;
+    line-height: 1.1
+}

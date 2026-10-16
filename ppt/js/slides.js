@@ -95,6 +95,8 @@ function buildSlides(R, pages, nama, ctx = {}) {
   const content = (title) => ({ bg: 'content', els: [tx(84, 23, 820, 41, title, { sz: 17, b: 1, c: '#fff', v: 'middle' }), tx(44, 678, 800, 28, `INTEGRASI DATA NERACA PENATAGUNAAN TANAH REGIONAL ${tahun}`, { sz: 12, b: 1, c: '#fff', v: 'middle' }), tx(880, 678, 300, 28, NAMA, { sz: 12, b: 1, c: '#fff', v: 'middle', al: 'center' }), tx(1200, 678, 56, 28, '', { sz: 13, b: 1, c: '#fff', v: 'middle', al: 'center', auto: 'pg' })] });
   const mapEl = src => ({ t: 'img', x: 590, y: 84, w: 650, h: 575, src });
   const S = [], skip = [], TOT = sumBy(R, 'LUASHA');
+  // Slide yang punya s.cont (slide lanjutan) -> slide lanjutan langsung disisipkan sesudahnya.
+  const pushWithCont = s0 => { S.push(s0); if (s0.cont) { S.push(...s0.cont); delete s0.cont } };
   const colset = R.cols || new Set(Object.keys(R[0])), has = (...f) => f.every(x => colset.has(x));
   // Slide tetap dibuat (agar urutan 20 slide terjaga) walau kolom tidak ada.
   const guard = (title, name, cols, fn) => {
@@ -105,15 +107,16 @@ function buildSlides(R, pages, nama, ctx = {}) {
   // Tabel otomatis: huruf & tinggi baris dikecilkan (memperhitungkan teks yang membungkus), lalu bila perlu dipecah jadi 2-3 tabel berdampingan.
   function fitTable(x, y, w, H, head, rows, o = {}) {
     const tot = o.tot ? rows[rows.length - 1] : null, data = o.tot ? rows.slice(0, -1) : rows, cw = o.cw || head.map(() => 1 / head.length), rh0 = o.rh || 24, maxP = o.maxP || (w >= 900 ? 3 : 2), gap = 14, sz0 = o.sz || 12;
-    const hOf = (r, pw, sz, rh) => Math.max(rh, Math.max(...r.map((v, c) => Math.ceil(String(v ?? '').length * sz * .56 / Math.max(20, pw * cw[c] - 14)))) * sz * 1.25 + 7);
-    const plan = (p, sz) => { const rh = Math.min(rh0, Math.max(13, Math.round(sz * 2.1))), per = Math.ceil(data.length / p), pw = (w - gap * (p - 1)) / p; let hh = 0;
-      for (let k = 0; k < p; k++) { const ch = data.slice(k * per, (k + 1) * per); if (!ch.length) continue; const rr = [head, ...ch, ...(k === p - 1 && tot ? [tot] : [])]; hh = Math.max(hh, rr.reduce((s, r) => s + hOf(r, pw, sz, rh), 0)) }
+    const hOf = (r, pw, sz, rh, sq) => Math.max(rh, Math.max(...r.map((v, c) => Math.ceil(String(v ?? '').length * sz * .56 / Math.max(20, pw * cw[c] - (sq ? 10 : 14))))) * sz * (sq ? 1.1 : 1.25) + (sq ? 3 : 7));
+    const plan = (p, sz, sq) => { const rh = sq ? Math.max(11, Math.ceil(sz * 1.5)) : Math.min(rh0, Math.max(13, Math.round(sz * 2.1))), per = Math.ceil(data.length / p), pw = (w - gap * (p - 1)) / p; let hh = 0;
+      for (let k = 0; k < p; k++) { const ch = data.slice(k * per, (k + 1) * per); if (!ch.length) continue; const rr = [head, ...ch, ...(k === p - 1 && tot ? [tot] : [])]; hh = Math.max(hh, rr.reduce((s, r) => s + hOf(r, pw, sz, rh, sq), 0)) }
       return { p, sz, rh, per, pw, hh } };
     let best = null;
-    search: for (let p = 1; p <= maxP; p++) for (let sz = sz0; sz >= (p < maxP ? 10 : 8); sz--) { const c = plan(p, sz); best = c; if (c.hh <= H) break search }
-    const { p, sz, rh, per, pw, hh } = best, els = [];
+    if (o.noShrink) { for (let p = 1; p <= maxP; p++) { best = plan(p, sz0, 0); if (best.hh <= H) break } } else
+    search: for (let p = 1; p <= maxP; p++) for (let sz = sz0; sz >= (p < maxP ? 10 : 8); sz--) { let c = plan(p, sz, 0); best = c; if (c.hh <= H) break search; c = plan(p, sz, 1); c.sq = 1; best = c; if (c.hh <= H) break search }
+    const { p, sz, rh, per, pw, hh, sq } = best, els = [];
     for (let k = 0; k < p; k++) { const ch = data.slice(k * per, (k + 1) * per), last = k === p - 1; if (!ch.length) continue;
-      els.push({ t: 'table', x: Math.round(x + k * (pw + gap)), y, w: Math.round(pw), head, rows: last && tot ? [...ch, tot] : ch, cw: o.cw, num: o.num, sz, rh, tot: !!(last && tot), ...(p === 1 && o.bold ? { bold: o.bold } : {}), ...(o.fx ? { fx: o.fx } : {}) }) }
+      els.push({ t: 'table', x: Math.round(x + k * (pw + gap)), y, w: Math.round(pw), head, rows: last && tot ? [...ch, tot] : ch, cw: o.cw, num: o.num, sz, rh, tot: !!(last && tot), ...(sq ? { tight: 1 } : {}), ...(p === 1 && o.bold ? { bold: o.bold } : {}), ...(o.fx ? { fx: o.fx } : {}) }) }
     return { els, bottom: Math.round(y + hh + 4) };
   }
   const top = (a, n) => a.slice(0, n), berubah = r => r.GQREKLAS === 'Berubah', tersedia = r => r.VNAME === 'Tersedia', tsr = r => r.KSPOLA === 'Tidak Sesuai';
@@ -203,18 +206,33 @@ function buildSlides(R, pages, nama, ctx = {}) {
     else s.els.push(tx(40, y + 14, 540, 40, `Tanah yang berubah penggunaannya seluas ${NF(vChg)} Ha (${PC(pctOf(vChg, TOT))}) dari total ${NF(TOT)} Ha.`, { sz: 13 }));
     s.els.push(mapEl(mapBerubah())); return s }));
   // ===== Perubahan penggunaan tanah (GQREKLAS = Berubah) per kecamatan, tertinggi -> terendah =====
-  S.push(guard('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN', 'Perubahan per Kecamatan', ['GQREKLAS', 'WADMKC'], () => {
+  pushWithCont(guard('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN', 'Perubahan per Kecamatan', ['GQREKLAS', 'WADMKC'], () => {
     const s = content('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN'), kl = group(R, r => r.WADMKC, r => r.WADMKC !== '-');
     const it = kl.map(x => ({ k: x.k, L: x.v, v: sumBy(R, 'LUASHA', r => r.WADMKC === x.k && berubah(r)) })).sort((a, b) => b.v - a.v), T = it.reduce((a, i) => a + i.v, 0);
     it.forEach(i => { i.pL = pctOf(i.v, i.L); i.pT = pctOf(i.v, T) });
     if (!it.length) { s.els.push(tx(60, 300, 1160, 80, '[Kolom kecamatan (WADMKC) tidak terisi di shapefile]', { sz: 20, al: 'center' })); return s }
-    const nb = Math.min(it.length, 8), ch = Math.min(230, nb * 28 + 14);
+    const nb = Math.min(it.length, 8), ch = Math.min(230, nb * 28 + 14), y0 = 118 + ch + 10;
     s.els.push(sub(40, 84, 540, 'Perubahan Penggunaan Tanah Tertinggi - Terendah per Kecamatan (Ha)'), { t: 'bar', x: 40, y: 118, w: 540, h: ch, items: it.slice(0, nb).map(i => ({ k: i.k, v: +i.v.toFixed(2) })) });
-    const ft = simpleTable(40, 118 + ch + 10, 540, 600 - (118 + ch + 10), ['Kecamatan', 'Luas Kec. (Ha)', 'Berubah (Ha)', '% thd Luas Kec.', '% thd Total Perubahan'], it, i => [i.k, NF(i.L), NF(i.v), PC(i.pL), PC(i.pT)],
-      { cw: [.06, .24, .17, .16, .17, .2], num: [2, 3, 4, 5], sz: 11, rh: 26, tot: ['', 'Jumlah', NF(total(kl)), NF(T), PC(pctOf(T, total(kl))), '100,00%'] });
-    const hi = it[0], lo = it[it.length - 1];
-    s.els.push(...ft.els, tx(40, Math.min(ft.bottom + 8, 625), 540, 50, T ? `Perubahan tertinggi di Kecamatan ${hi.k} seluas ${NF(hi.v)} Ha (${PC(hi.pT)} dari total perubahan).` + (it.length > 1 ? ` Terendah di Kecamatan ${lo.k} seluas ${NF(lo.v)} Ha (${PC(lo.pT)}).` : '') : 'Tidak terdapat perubahan penggunaan tanah.', { sz: 12 }));
-    s.els.push(mapEl(mapBerubah())); return s
+    // Tabel: ukuran huruf TETAP (11). Bila baris tidak muat, sisanya dipindah ke slide lanjutan (tanpa mengecilkan huruf).
+    const head6 = ['No', 'Kecamatan', 'Luas Kec. (Ha)', 'Berubah (Ha)', '% thd Luas Kec.', '% thd Total Perubahan'], cw6 = [.06, .24, .17, .16, .17, .2];
+    const rowsAll = it.map((i, n) => [String(n + 1), i.k, NF(i.L), NF(i.v), PC(i.pL), PC(i.pT)]), totRow = ['', 'Jumlah', NF(total(kl)), NF(T), PC(pctOf(T, total(kl))), '100,00%'];
+    const mkT = (x, y, w, H, chunk, last, mp) => fitTable(x, y, w, H, head6, last ? [...chunk, totRow] : chunk, { cw: cw6, num: [2, 3, 4, 5], sz: 11, rh: 26, tot: last ? 1 : 0, maxP: mp, noShrink: 1 });
+    const TXT = 46;   // ruang untuk teks ringkasan di bawah tabel terakhir
+    const fitMax = (x, y, w, H, from, mp) => { const rest = rowsAll.slice(from);
+      for (let n = rest.length; n >= 1; n--) { const last = n === rest.length, lim = H - (last ? TXT : 0), ft = mkT(x, y, w, lim, rest.slice(0, n), last, mp); if (ft.bottom <= y + lim) return { n, last, ft } }
+      return { n: 1, last: rest.length === 1, ft: mkT(x, y, w, H, rest.slice(0, 1), rest.length === 1, mp) } };
+    const hi = it[0], lo = it[it.length - 1], cont = [];
+    const summ = T ? `Perubahan tertinggi di Kecamatan ${hi.k} seluas ${NF(hi.v)} Ha (${PC(hi.pT)} dari total perubahan).` + (it.length > 1 ? ` Terendah di Kecamatan ${lo.k} seluas ${NF(lo.v)} Ha (${PC(lo.pT)}).` : '') : 'Tidak terdapat perubahan penggunaan tanah.';
+    let cur = s, y = y0, w = 540, H = 655 - y0, mp = 1, from = 0;
+    while (from < rowsAll.length) {
+      const f = fitMax(40, y, w, H, from, mp); cur.els.push(...f.ft.els);
+      if (f.last) { cur.els.push(tx(40, Math.min(f.ft.bottom + 8, 625), w, 50, summ, { sz: 12 })); break }
+      from += f.n;
+      cur = content('PERUBAHAN PENGGUNAAN TANAH BERDASARKAN KECAMATAN (LANJUTAN)'); cont.push(cur);
+      cur.els.push(sub(40, 84, 1200, 'Perubahan Penggunaan Tanah per Kecamatan (Ha) - Lanjutan'));
+      y = 118; w = 1200; H = 655 - 118; mp = 2;
+    }
+    s.els.push(mapEl(mapBerubah())); if (cont.length) s.cont = cont; return s
   }));
   S.push(guard('ANALISIS PERUBAHAN PENGGUNAAN TANAH', 'Analisis Perubahan (2)', ['GQREKLAS', 'GQNAME', 'QNAME25', 'GNAME25'], () => {
     const s = content('ANALISIS PERUBAHAN PENGGUNAAN TANAH'), t10 = top(chgT, 10);

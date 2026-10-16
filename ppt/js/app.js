@@ -109,7 +109,7 @@
   }
   function tableHTML(e, i, edit) {
     const cw = e.cw || e.head.map(() => 1 / e.head.length), ce = edit ? ' contenteditable="true"' : '', isN = c => (e.num || []).includes(c);
-    return `<table style="font-size:${e.sz}px"><colgroup>${cw.map(w => `<col style="width:${w * 100}%">`).join('')}</colgroup><tr style="height:${e.rh}px">${e.head.map((h, c) => `<th class="${isN(c) ? 'n' : ''}"${ce} data-i="${i}" data-r="-1" data-c="${c}">${esc(h)}</th>`).join('')}</tr>` +
+    return `<table class="${e.tight ? 'tight' : ''}" style="font-size:${e.sz}px"><colgroup>${cw.map(w => `<col style="width:${w * 100}%">`).join('')}</colgroup><tr style="height:${e.rh}px">${e.head.map((h, c) => `<th class="${isN(c) ? 'n' : ''}"${ce} data-i="${i}" data-r="-1" data-c="${c}">${esc(h)}</th>`).join('')}</tr>` +
       e.rows.map((r, ri) => `<tr style="height:${e.rh}px" class="${e.tot && ri === e.rows.length - 1 ? 'tot' : (e.bold || []).includes(ri) ? 'grp' : ''}">${r.map((v, c) => `<td class="${isN(c) ? 'n' : ''}"${ce} data-i="${i}" data-r="${ri}" data-c="${c}">${esc(v)}</td>`).join('')}</tr>`).join('') + '</table>';
   }
   // Gaya tambahan per elemen: font, miring, garis bawah, transparansi, rotasi
