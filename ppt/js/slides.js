@@ -48,17 +48,19 @@ const arahanSesuai = k => /sesuai tata ruang/i.test(k || '');
 // Slide Sosial Ekonomi: kepadatan penduduk diisi manual per kecamatan; total (rata-rata tertimbang luas) dan teks analisis dihitung otomatis.
 function sosekRecalc(s) {
   const m = s.meta; if (!m || m.kind !== 'sosek') return { cells: [] };
-  const el = s.els.find(e => e.fx === 'sosek'); if (!el) return { cells: [] };
-  const cells = [], n = m.rows.length, den = []; let all = true, A = 0, PP = 0;
-  const set = (r, c, v) => { if (el.rows[r][c] !== v) { el.rows[r][c] = v; cells.push([r, c, v]) } };
-  m.rows.forEach((k, i) => { const d = parsePop(el.rows[i][m.denCol]); den[i] = d > 0 ? d : null; if (d > 0) { A += k.km2; PP += d * k.km2 } else all = false });
-  set(n, m.denCol, all && A ? NF0(PP / A) : '-');
-  const t = s.els.find(e => e.fx === 'sosekText'); let text = null;
-  if (t && m.best >= 0) { const k = m.rows[m.best];
-    text = `Potensi sosial ekonomi paling tinggi: Kecamatan ${k.k}\n○  Lahan "Tersedia" mencapai ${NF(k.ter)} Ha (${PC(k.terP)})\n○  ` + (den[m.best] ? `Kepadatan penduduk ${NF0(den[m.best])} jiwa/km²` : '[Isi kepadatan penduduk pada tabel]') +
+  const grp = m.grp || [s], dc = m.denCol, tbl = sl => sl.els.find(e => e.fx === 'sosek');
+  if (!tbl(s)) return { cells: [] };
+  const cells = [], den = [], rowsAll = []; let all = true, A = 0, PP = 0;
+  grp.forEach(sl => { const el = tbl(sl); if (!el) return; sl.meta.rows.forEach((k, i) => { rowsAll.push(k); const d = parsePop(el.rows[i][dc]); den.push(d > 0 ? d : null); if (d > 0) { A += k.km2; PP += d * k.km2 } else all = false }) });
+  // baris Jumlah = baris terakhir pada tabel di slide terakhir
+  const ls = grp[grp.length - 1], lel = tbl(ls), tn = ls.meta.rows.length, tv = all && A ? NF0(PP / A) : '-';
+  if (lel && lel.rows[tn] && lel.rows[tn][dc] !== tv) { lel.rows[tn][dc] = tv; if (ls === s) cells.push([tn, dc, tv]) }
+  const f = grp.find(sl => sl.els.some(e => e.fx === 'sosekText')) || grp[0], t = f.els.find(e => e.fx === 'sosekText'); let text = null; const best = grp[0].meta.best;
+  if (t && best >= 0 && rowsAll[best]) { const k = rowsAll[best];
+    text = `Potensi sosial ekonomi paling tinggi: Kecamatan ${k.k}\n○  Lahan "Tersedia" mencapai ${NF(k.ter)} Ha (${PC(k.terP)})\n○  ` + (den[best] ? `Kepadatan penduduk ${NF0(den[best])} jiwa/km²` : '[Isi kepadatan penduduk pada tabel]') +
       (k.hat != null ? `\n○  Lahan ${NF(k.hat)} Ha yang "Ada HAT" (Hak Atas Tanah) (${PC(k.hatP)})` : '');
     t.text = text }
-  return { cells, text };
+  return { cells, text: f === s ? text : null };
 }
 
 // Slide Laju Perubahan: tahun lama diisi manual (kotak kuning) -> Selisih Tahun dan Laju per Tahun terhitung otomatis.
@@ -108,16 +110,74 @@ function buildSlides(R, pages, nama, ctx = {}) {
   function fitTable(x, y, w, H, head, rows, o = {}) {
     const tot = o.tot ? rows[rows.length - 1] : null, data = o.tot ? rows.slice(0, -1) : rows, cw = o.cw || head.map(() => 1 / head.length), rh0 = o.rh || 24, maxP = o.maxP || (w >= 900 ? 3 : 2), gap = 14, sz0 = o.sz || 12;
     const hOf = (r, pw, sz, rh, sq) => Math.max(rh, Math.max(...r.map((v, c) => Math.ceil(String(v ?? '').length * sz * .56 / Math.max(20, pw * cw[c] - (sq ? 10 : 14))))) * sz * (sq ? 1.1 : 1.25) + (sq ? 3 : 7));
-    const plan = (p, sz, sq) => { const rh = sq ? Math.max(11, Math.ceil(sz * 1.5)) : Math.min(rh0, Math.max(13, Math.round(sz * 2.1))), per = Math.ceil(data.length / p), pw = (w - gap * (p - 1)) / p; let hh = 0;
-      for (let k = 0; k < p; k++) { const ch = data.slice(k * per, (k + 1) * per); if (!ch.length) continue; const rr = [head, ...ch, ...(k === p - 1 && tot ? [tot] : [])]; hh = Math.max(hh, rr.reduce((s, r) => s + hOf(r, pw, sz, rh, sq), 0)) }
+    const planOf = (p, sz, sq, dat, tt) => { const rh = sq ? Math.max(11, Math.ceil(sz * 1.5)) : Math.min(rh0, Math.max(13, Math.round(sz * 2.1))), per = Math.ceil(dat.length / p), pw = (w - gap * (p - 1)) / p; let hh = 0;
+      for (let k = 0; k < p; k++) { const ch = dat.slice(k * per, (k + 1) * per); if (!ch.length) continue; const rr = [head, ...ch, ...(k === p - 1 && tt ? [tt] : [])]; hh = Math.max(hh, rr.reduce((s, r) => s + hOf(r, pw, sz, rh, sq), 0)) }
       return { p, sz, rh, per, pw, hh } };
-    let best = null;
+    const plan = (p, sz, sq) => planOf(p, sz, sq, data, tot);
+    let best = null, dat = data, tt = tot, rest = null;
+    if (o.page) {   // huruf TIDAK dikecilkan: bila tidak muat, baris yang tersisa (termasuk baris Jumlah) dipindah ke slide lanjutan
+      for (let p = 1; p <= maxP && !best; p++) { const c = plan(p, sz0, 0); if (c.hh <= H) best = c }
+      if (!best) {
+        for (let n = data.length - 1; n >= 1 && !best; n--) { const c = planOf(maxP, sz0, 0, data.slice(0, n), null); if (c.hh <= H) { best = c; dat = data.slice(0, n); tt = null; rest = [...data.slice(n), ...(tot ? [tot] : [])] } }
+        if (!best) { best = planOf(maxP, sz0, 0, data.slice(0, 1), null); dat = data.slice(0, 1); tt = null; rest = [...data.slice(1), ...(tot ? [tot] : [])] }
+      }
+    } else
     if (o.noShrink) { for (let p = 1; p <= maxP; p++) { best = plan(p, sz0, 0); if (best.hh <= H) break } } else
     search: for (let p = 1; p <= maxP; p++) for (let sz = sz0; sz >= (p < maxP ? 10 : 8); sz--) { let c = plan(p, sz, 0); best = c; if (c.hh <= H) break search; c = plan(p, sz, 1); c.sq = 1; best = c; if (c.hh <= H) break search }
     const { p, sz, rh, per, pw, hh, sq } = best, els = [];
-    for (let k = 0; k < p; k++) { const ch = data.slice(k * per, (k + 1) * per), last = k === p - 1; if (!ch.length) continue;
-      els.push({ t: 'table', x: Math.round(x + k * (pw + gap)), y, w: Math.round(pw), head, rows: last && tot ? [...ch, tot] : ch, cw: o.cw, num: o.num, sz, rh, tot: !!(last && tot), ...(sq ? { tight: 1 } : {}), ...(p === 1 && o.bold ? { bold: o.bold } : {}), ...(o.fx ? { fx: o.fx } : {}) }) }
-    return { els, bottom: Math.round(y + hh + 4) };
+    for (let k = 0; k < p; k++) { const ch = dat.slice(k * per, (k + 1) * per), last = k === p - 1; if (!ch.length) continue;
+      els.push({ t: 'table', x: Math.round(x + k * (pw + gap)), y, w: Math.round(pw), head, rows: last && tt ? [...ch, tt] : ch, cw: o.cw, num: o.num, sz, rh, tot: !!(last && tt), ...(sq ? { tight: 1 } : {}), ...(p === 1 && o.bold ? { bold: o.bold } : {}), ...(o.fx ? { fx: o.fx } : {}) }) }
+    if (rest && els.length) els[els.length - 1].ov = { head, rows: rest, tot: !!tot, cw: o.cw, num: o.num, sz: sz0, rh: rh0, w, fx: o.fx, bottom: Math.round(y + hh + 4) };   // diproses expandOverflow()
+    return { els, bottom: Math.round(y + hh + 4), rest };
+  }
+  // Tabel yang tidak muat (opsi page) -> sisa barisnya dibuat di slide lanjutan tepat setelah slide asal (ukuran huruf tidak diubah).
+  // Elemen yang aslinya di bawah tabel (mis. "Analisis Deskriptif", bagian B) dipindah ke BAWAH tabel terakhir: tabel selesai dulu, baru elemen itu.
+  function expandOverflow(list) {
+    const LIM = 655, END = 662, out = [];
+    const estH = t => t.t === 'table' ? (t.rows.length + 1) * (t.rh || 24) + 12
+      : t.t === 'text' ? (t.text ? Math.min(t.h, Math.ceil(String(t.text).length * (t.sz || 16) * .55 / Math.max(40, t.w)) * (t.sz || 16) * 1.4 + 8 + (t.sz || 16) * 1.4 * (String(t.text).split('\n').length - 1)) : Math.min(t.h, 110))
+      : t.h;
+    for (const s of list) {
+      out.push(s);
+      const grp = [s];
+      for (const e of [...(s.els || [])]) { if (e.t !== 'table' || !e.ov) continue;
+        const ov = e.ov; delete e.ov;
+        const allRows = [...e.rows, ...ov.rows];
+        const trail = s.els.filter(t => t !== e && t.y < 670 && t.y >= ov.bottom - 2 && t.x < e.x + e.w && t.x + t.w > e.x);
+        s.els = s.els.filter(t => !trail.includes(t));
+        const minY = trail.length ? Math.min(...trail.map(t => t.y)) : 0, span = trail.length ? Math.max(...trail.map(t => t.y + estH(t))) - minY : 0;
+        const gap = Math.max(8, Math.min(24, minY - ov.bottom)), need = trail.length ? gap + span : 0;
+        const attempt = (x, y, w, mp, rowsL) => {
+          const mk = H => fitTable(x, y, w, H, ov.head, rowsL, { cw: ov.cw, num: ov.num, sz: ov.sz, rh: ov.rh, tot: ov.tot, page: 1, fx: ov.fx, maxP: mp });
+          let ft = mk(LIM - y);
+          if (!ft.rest && need && ft.bottom + need > END) ft = mk(LIM - y - need);   // sisakan ruang untuk elemen di bawah tabel
+          return ft };
+        const dropOv = ft => { const l = ft.els[ft.els.length - 1], nx = l && l.ov; if (nx) delete l.ov; return nx ? nx.rows : [] };
+        const putTrail = (sl, ft) => { const dy = ft.bottom + gap - minY; trail.forEach(t => { t.y = Math.round(t.y + dy); if (t.t === 'text') t.h = Math.max(30, Math.min(t.h, 668 - t.y)); sl.els.push(t) }) };
+        // halaman pertama: tabel dipasang ulang dengan seluruh sisa tinggi slide
+        let ft = attempt(e.x, e.y, e.w, 1, allRows), rows = dropOv(ft);
+        s.els.splice(s.els.indexOf(e), 1, ...ft.els);
+        if (!rows.length) { putTrail(s, ft); continue }
+        let guardN = 0;
+        while (rows.length && guardN++ < 12) {
+          const c = content(String((s.els[0] && s.els[0].text) || '').replace(/\s*\(LANJUTAN\)\s*$/, '') + ' (LANJUTAN)'); c.els.push(sub(40, 84, 1200, 'Lanjutan tabel'));
+          let f = attempt(40, 118, ov.w, 1, rows);
+          if (f.rest && !ov.fx) f = attempt(40, 118, 1200, 2, rows);
+          rows = dropOv(f); c.els.push(...f.els); out.push(c); grp.push(c);
+          if (!rows.length) putTrail(c, f);
+        }
+      }
+      // Slide Sosial Ekonomi: data per halaman + hitung ulang kepadatan/total lintas halaman
+      if (s.meta && s.meta.kind === 'sosek') {
+        const all = s.meta.rows, tbl = sl => sl.els.find(x => x.fx === 'sosek'); let off = 0;
+        grp.forEach((sl, gi) => { const t = tbl(sl); if (!t) return; const nData = t.rows.length - (t.tot ? 1 : 0);
+          if (gi === 0) { s.meta.rows = all.slice(0, nData) } else sl.meta = { kind: 'sosek', denCol: s.meta.denCol, rows: all.slice(off, off + nData) };
+          off += nData });
+        grp.forEach(sl => { if (sl.meta) sl.meta.grp = grp });
+        sosekRecalc(s);
+      }
+    }
+    return out;
   }
   const top = (a, n) => a.slice(0, n), berubah = r => r.GQREKLAS === 'Berubah', tersedia = r => r.VNAME === 'Tersedia', tsr = r => r.KSPOLA === 'Tidak Sesuai';
   const pctOf = (v, t) => t ? v / t * 100 : 0;
@@ -131,7 +191,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     const ft = fitTable(40, y + 190, 540, 150, ['No', headLabel, 'Luas (Ha)', '%'], rows, { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, tot: 1, maxP: 1 });
     s.els.push(...ft.els); return ft.bottom;
   }
-  const simpleTable = (x, y, w, H, head, items, rowf, o = {}) => { const rows = items.map((i, n) => [String(n + 1), ...rowf(i, n)]); if (o.tot) rows.push(o.tot); return fitTable(x, y, w, H, ['No', ...head], rows, { cw: o.cw, num: o.num, sz: o.sz || 12, rh: o.rh || 26, tot: !!o.tot, maxP: o.maxP || 1, bold: o.bold, fx: o.fx }) };
+  const simpleTable = (x, y, w, H, head, items, rowf, o = {}) => { const rows = items.map((i, n) => [String(n + 1), ...rowf(i, n)]); if (o.tot) rows.push(o.tot); return fitTable(x, y, w, H, ['No', ...head], rows, { cw: o.cw, num: o.num, sz: o.sz || 12, rh: o.rh || 26, tot: !!o.tot, maxP: o.maxP || 1, bold: o.bold, fx: o.fx, page: o.page }) };
 
   // ===== 1. Sampul =====
   S.push({ bg: 'cover', els: [
@@ -153,7 +213,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     s.els.push(sub(40, 84, 540, 'Overview Wilayah'), tx(40, 118, 540, 112, ov.map(l => '○  ' + l).join('\n'), { sz: 13 }),
       sub(40, 236, 540, 'Batas Wilayah (isi manual)'), tx(40, 270, 540, 96, ['Utara', 'Timur', 'Selatan', 'Barat'].map(a => `○  Sebelah ${a}: [isi]`).join('\n'), { sz: 13 }),
       sub(40, 372, 540, 'Luas Wilayah per Kecamatan'));
-    if (N) { const ft = simpleTable(40, 406, 540, 660 - 406, ['Kecamatan', 'Luas (Ha)', '%'], kc, i => [i.k, NF(i.v), PC(i.p)], { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, tot: ['', 'Jumlah', NF(total(kc)), '100,00%'] }); s.els.push(...ft.els) }
+    if (N) { const ft = simpleTable(40, 406, 540, 660 - 406, ['Kecamatan', 'Luas (Ha)', '%'], kc, i => [i.k, NF(i.v), PC(i.p)], { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, page: 1, tot: ['', 'Jumlah', NF(total(kc)), '100,00%'] }); s.els.push(...ft.els) }
     else s.els.push(tx(40, 410, 540, 40, '[Kolom kecamatan (WADMKC) tidak terisi di shapefile]', { sz: 13 }));
     s.els.push(mapEl(catMap(R, r => r.WADMKC, 30, { ...mapOpt, lw: 330 }))); return s
   }));
@@ -165,7 +225,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
       const cnt = new Map(); ts.forEach(p => cnt.set(p.WADMKC, (cnt.get(p.WADMKC) || 0) + 1));
       const it = [...cnt].map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v), N = ts.length, ch = Math.min(250, it.length * 28 + 14), fd = d => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
       s.els.push(sub(40, 84, 540, `Titik Survei Lapangan: ${NF0(N)} Lokasi`), { t: 'bar', x: 40, y: 118, w: 540, h: ch, items: top(it, 10), fmt: 'int' });
-      const ft = simpleTable(40, 118 + ch + 10, 540, 665 - (118 + ch + 10), ['Kecamatan', 'Jumlah Titik', '%'], it, i => [i.k, NF0(i.v), PC(pctOf(i.v, N))], { cw: [.08, .5, .24, .18], num: [2, 3], tot: ['', 'Jumlah', NF0(N), '100,00%'] });
+      const ft = simpleTable(40, 118 + ch + 10, 540, 665 - (118 + ch + 10), ['Kecamatan', 'Jumlah Titik', '%'], it, i => [i.k, NF0(i.v), PC(pctOf(i.v, N))], { cw: [.08, .5, .24, .18], num: [2, 3], page: 1, tot: ['', 'Jumlah', NF0(N), '100,00%'] });
       s.els.push(...ft.els, sub(590, 84, 650, ts.dates ? `Pelaksanaan Survei: ${fd(ts.dates[0])}${ts.dates[0].getTime() !== ts.dates[1].getTime() ? ' - ' + fd(ts.dates[1]) : ''}` : 'Peta Sebaran Titik Survei'),
         { t: 'img', x: 590, y: 118, w: 650, h: 541, src: renderMap(R, () => '#e8edf3', [{ k: 'Titik Survei (nomor titik)', c: '#e53e3e' }], { w: 1000, h: 832, lw: 260, pts: ts, pr: 12, ptLabel: true, parcels: false }) });
     }
@@ -255,7 +315,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     const s = content('ANALISIS KESESUAIAN TERHADAP RTRW'), y = pieBlock(s, 84, 'A. Kesesuaian Penggunaan Tanah terhadap RTRW', ks, CK, 'Kesesuaian');
     if (has('WADMKC')) { const c = top(group(R, r => r.WADMKC, tsr), 5);
       s.els.push(sub(40, y + 10, 540, 'B. Ketidaksesuaian Tertinggi Berdasarkan Kecamatan (Top 5)'));
-      const ft = simpleTable(40, y + 44, 540, 660 - (y + 44), ['Kecamatan', 'Tidak Sesuai (Ha)', '% Total Tidak Sesuai'], c, i => [i.k, NF(i.v), PC(i.p)], { cw: [.07, .4, .27, .26], num: [2, 3], sz: 12 }); s.els.push(...ft.els) }
+      const ft = simpleTable(40, y + 44, 540, 660 - (y + 44), ['Kecamatan', 'Tidak Sesuai (Ha)', '% Total Tidak Sesuai'], c, i => [i.k, NF(i.v), PC(i.p)], { cw: [.07, .4, .27, .26], num: [2, 3], sz: 12, page: 1 }); s.els.push(...ft.els) }
     s.els.push(mapEl(mapKs())); return s }));
 
   // ===== 10. Dominasi ketidaksesuaian (KSPOLA) =====
@@ -286,7 +346,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     const s = content('KETERSEDIAAN TANAH'), y = pieBlock(s, 84, 'A. Luas dan Persentase Ketersediaan Tanah', vt, CT, 'Ketersediaan');
     if (has('WADMKC')) { const kc = top(group(R, r => r.WADMKC, tersedia), 5), kt = group(R, r => r.WADMKC); const kl = Object.fromEntries(kt.map(x => [x.k, x.v]));
       s.els.push(sub(40, y + 10, 540, 'B. Ketersediaan Tanah Tertinggi per Kecamatan (Top 5)'));
-      const ft = simpleTable(40, y + 44, 540, 660 - (y + 44), ['Kecamatan', 'Tersedia (Ha)', '% dari Luas Kec.'], kc, i => [i.k, NF(i.v), PC(pctOf(i.v, kl[i.k]))], { cw: [.07, .4, .27, .26], num: [2, 3], sz: 12 }); s.els.push(...ft.els) }
+      const ft = simpleTable(40, y + 44, 540, 660 - (y + 44), ['Kecamatan', 'Tersedia (Ha)', '% dari Luas Kec.'], kc, i => [i.k, NF(i.v), PC(pctOf(i.v, kl[i.k]))], { cw: [.07, .4, .27, .26], num: [2, 3], sz: 12, page: 1 }); s.els.push(...ft.els) }
     s.els.push(mapEl(mapTer())); return s }));
   S.push(guard('KETERSEDIAAN TANAH', 'Ketersediaan Tanah (2)', ['VNAME', 'QNAME25', 'NAMOBJ'], () => {
     const s = content('KETERSEDIAAN TANAH'), pr = top(group(R, r => r.NAMOBJ, tersedia), 10), qn = top(group(R, r => r.QNAME25, tersedia), 5);
@@ -308,7 +368,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     s.els.push(sub(40, by, 560, 'Potensi Sektoral (Ha)'), { t: 'bar', x: 40, y: by + 34, w: 560, h: 90, items: [{ k: 'Potensi Pertanian Pangan', v: +vPangan.toFixed(2) }, { k: 'Potensi Sektor Lainnya', v: +vLain.toFixed(2) }] });
     if (has('WADMKC')) { const kk = group(R, r => r.WADMKC), rows = kk.map(x => ({ k: x.k, a: sumBy(R, 'LUASHA', r => r.WADMKC === x.k && isPangan(r)), b: sumBy(R, 'LUASHA', r => r.WADMKC === x.k && isLain(r)) })).sort((p, q) => (q.a + q.b) - (p.a + p.b)).slice(0, 5);
       s.els.push(sub(640, by, 600, 'Luasan Potensi Sektoral Tiap Kecamatan (Top 5, Ha)'));
-      const ft = simpleTable(640, by + 34, 600, 665 - by - 34, ['Kecamatan', 'Pangan', 'Sektor Lain', 'Jumlah'], rows, i => [i.k, NF(i.a), NF(i.b), NF(i.a + i.b)], { cw: [.07, .33, .2, .2, .2], num: [2, 3, 4], sz: 12, rh: 26 }); s.els.push(...ft.els) }
+      const ft = simpleTable(640, by + 34, 600, 665 - by - 34, ['Kecamatan', 'Pangan', 'Sektor Lain', 'Jumlah'], rows, i => [i.k, NF(i.a), NF(i.b), NF(i.a + i.b)], { cw: [.07, .33, .2, .2, .2], num: [2, 3, 4], sz: 12, rh: 26, page: 1 }); s.els.push(...ft.els) }
     return s }));
 
   // ===== 15 & 16. Potensi pangan / sektor lain =====
@@ -318,7 +378,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
     const rows = kk.map(x => [x.k, NF(sumBy(R, 'LUASHA', r => r.WADMKC === x.k && isPangan(r) && arahanSesuai(r.V_ARAHAN))), NF(sumBy(R, 'LUASHA', r => r.WADMKC === x.k && isPangan(r) && !arahanSesuai(r.V_ARAHAN))), NF(x.v)]);
     const sS = sumBy(R, 'LUASHA', r => isPangan(r) && arahanSesuai(r.V_ARAHAN));
     s.els.push(sub(40, 84, 540, 'A. Potensi Pertanian Pangan per Kecamatan (Ha)'));
-    const ft = simpleTable(40, 118, 540, 250, ['Kecamatan', 'Sesuai Tata Ruang', 'Optimalisasi / Penyesuaian', 'Jumlah (Ha)'], kk, (x, n) => rows[n], { cw: [.07, .31, .21, .23, .18], num: [2, 3, 4], sz: 11, rh: 26, tot: ['', 'Jumlah', NF(sS), NF(vPangan - sS), NF(vPangan)] }); s.els.push(...ft.els);
+    const ft = simpleTable(40, 118, 540, 250, ['Kecamatan', 'Sesuai Tata Ruang', 'Optimalisasi / Penyesuaian', 'Jumlah (Ha)'], kk, (x, n) => rows[n], { cw: [.07, .31, .21, .23, .18], num: [2, 3, 4], sz: 11, rh: 26, page: 1, tot: ['', 'Jumlah', NF(sS), NF(vPangan - sS), NF(vPangan)] }); s.els.push(...ft.els);
     const ar = top(group(R, r => cleanArahan(r.V_ARAHAN), isPangan), 6), y2 = ft.bottom + 10;
     s.els.push(sub(40, y2, 540, 'B. Arahan Pertanian Pangan Terbesar'));
     const f2 = simpleTable(40, y2 + 34, 540, 640 - (y2 + 34), ['Arahan', 'Luas (Ha)', '%'], ar, i => [i.k, NF(i.v), PC(i.p)], { cw: [.07, .55, .22, .16], num: [2, 3], sz: 11, rh: 24 }); s.els.push(...f2.els, tx(40, Math.min(f2.bottom + 6, 640), 540, 32, `Total ${NF(vPangan)} Ha (${PC(pctOf(vPangan, TOT))} dari luas wilayah). ${POT_NOTE}`, { sz: 10 }));
@@ -360,11 +420,10 @@ function buildSlides(R, pages, nama, ctx = {}) {
       const data = kecs.map(calc); data.forEach(o => mrows.push(o)); const tt = calc(null);
       const rows = data.map((o, i) => [String(i + 1), ...row(o)]); rows.push(['', ...row(tt)]); rows[rows.length - 1][10] = '-';
       const head = ['No', 'Kecamatan', 'Tersedia (Ha)', 'Tersedia (%)', 'Tidak Tersedia (Ha)', 'Tidak Tersedia (%)', 'Ada HAT (Ha)', 'Ada HAT (%)', 'Belum Ada HAT (Ha)', 'Belum Ada HAT (%)', 'Kepadatan Penduduk (jiwa/km²) - isi manual'];
-      const ft = fitTable(40, 120, 1200, 330, head, rows, { cw: [.04, .13, .09, .08, .1, .09, .09, .08, .1, .09, .11], num: [2, 3, 4, 5, 6, 7, 8, 9, 10], sz: 12, rh: 28, tot: 1, maxP: 1, fx: 'sosek' });
+      const ft = fitTable(40, 120, 1200, 330, head, rows, { cw: [.04, .13, .09, .08, .1, .09, .09, .08, .1, .09, .11], num: [2, 3, 4, 5, 6, 7, 8, 9, 10], sz: 12, rh: 28, tot: 1, maxP: 1, page: 1, fx: 'sosek' });
       const by = Math.min(Math.max(ft.bottom + 16, 230), 600), best = mrows.reduce((b, o, i) => o.ter > (mrows[b]?.ter ?? -1) ? i : b, -1);
       s.meta = { kind: 'sosek', denCol: 10, rows: mrows.map(o => ({ k: o.k, km2: o.km2, ter: o.ter, terP: o.terP, hat: o.hat, hatP: o.hatP })), best };
       s.els.push(sub(40, 84, 1200, 'Tabel Analisis Sosial Ekonomi (ketersediaan tanah, penguasaan tanah/HAT, kepadatan penduduk - isi kolom terakhir)'), ...ft.els, sub(40, by, 1200, 'Analisis Deskriptif Sosial Ekonomi'), tx(40, by + 36, 1200, Math.max(40, 668 - by - 36), '', { sz: 16, fx: 'sosekText' }));
-      sosekRecalc(s);
     }
     S.push(s) }
 
@@ -382,5 +441,5 @@ function buildSlides(R, pages, nama, ctx = {}) {
 
   // ===== 20. Terima kasih =====
   S.push({ bg: 'cover', els: [tx(100, 215, 760, 90, 'TERIMA KASIH', { sz: 60, b: 1, c: YEL }), tx(144, 349, 475, 58, NAMA, { sz: 26, b: 1, c: '#fff', v: 'middle', al: 'center' }), {...PH_COVER}] });
-  return { slides: S, info: { nama, tahun, skipped: skip } };
+  return { slides: expandOverflow(S), info: { nama, tahun, skipped: skip } };
 }
