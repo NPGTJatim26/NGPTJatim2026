@@ -314,6 +314,7 @@ function strokeLines(x, lines, layers) {
 // ============ Basemap (tile satelit) ============
 const BASEMAPS = {
   google: { name: 'Google Satelit', url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', sub: '0123', attr: 'Imagery © Google', maxZ: 20 },
+  osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', sub: '', attr: '© OpenStreetMap contributors', maxZ: 19 },
   esri: { name: 'Esri World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: '', attr: 'Imagery © Esri, Maxar, Earthstar Geographics', maxZ: 19 }
 };
 const BASEMAP = { ready: null };
@@ -338,11 +339,11 @@ async function buildMosaic(rows, id, prog) {
   try { g.getImageData(0, 0, 1, 1) } catch (e) { return null }
   return { canvas: cnv, u0: tx0 / n, v0: ty0 / n, S: 256 * n, w: cnv.width, h: cnv.height, id, z, attr: P.attr, tiles: ok + '/' + jobs.length };
 }
-// provider: 'google' | 'esri' | 'none'. Google gagal (mis. diblokir) -> otomatis coba Esri.
+// provider: 'google' | 'esri' | 'osm' | 'none'. Google gagal (mis. diblokir) -> otomatis coba Esri.
 async function prepareBasemap(rows, provider, prog) {
   BASEMAP.ready = null; await symLoad();
   if (provider === 'none') return { used: 'none' };
-  for (const id of provider === 'esri' ? ['esri'] : ['google', 'esri']) { let m = null; try { m = await buildMosaic(rows, id, prog) } catch (e) { console.warn('Basemap', id, e) } if (m) { BASEMAP.ready = m; return { used: id, fallback: id !== provider, tiles: m.tiles, z: m.z } } }
+  for (const id of provider === 'osm' ? ['osm'] : provider === 'esri' ? ['esri'] : ['google', 'esri']) { let m = null; try { m = await buildMosaic(rows, id, prog) } catch (e) { console.warn('Basemap', id, e) } if (m) { BASEMAP.ready = m; return { used: id, fallback: id !== provider, tiles: m.tiles, z: m.z } } }
   return { used: null };
 }
 

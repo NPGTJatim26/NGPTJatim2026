@@ -39,7 +39,9 @@
           <label for="kab">Nama Kabupaten/Kota (kosongkan = otomatis dari data)</label>
           <input type="text" id="kab" placeholder="mis. Kota Blitar" />
           <label for="basemap">Basemap peta</label>
-          <select id="basemap"><option value="google" selected>Google Satelit (jika gagal → Esri)</option><option value="esri">Esri World Imagery</option><option value="none">Tanpa basemap</option></select>
+          <select id="basemap"><option value="google" selected>Google Satelit (jika gagal → Esri)</option><option value="esri">Esri World Imagery</option><option value="osm">OpenStreetMap (peta jalan)</option><option value="none">Tanpa basemap</option></select>
+          <label for="tplmode">Latar slide</label>
+          <select id="tplmode"><option value="tpl" selected>Pakai template (sampul, latar &amp; footer)</option><option value="none">Tanpa template (kanvas putih kosong)</option></select>
           <button id="gen" disabled>Generate Presentasi</button>
         </div>
       </section>
@@ -58,7 +60,23 @@
             <button id="delEl" class="ghost">Hapus elemen</button>
             <button id="pdf">Simpan PDF</button><button id="pptx">Simpan PPTX</button>
           </div>
-          <div class="hint" style="margin-bottom:8px">Klik teks atau sel tabel untuk mengedit. Klik elemen untuk memilih (Delete = hapus), lalu seret ✥ untuk memindah atau kotak di pojok kanan-bawah untuk mengubah ukuran. Gambar/grafik juga bisa diseret langsung.</div>
+          <div id="props" class="tbar props off">
+            <span id="gTxt"><select id="pfont" title="Jenis huruf"></select> <input type="number" id="psz" min="6" max="120" title="Ukuran huruf" /> <input type="color" id="pc" title="Warna teks" />
+              <span id="gFmt"><button id="pb" class="ghost" title="Tebal"><b>B</b></button><button id="pi" class="ghost" title="Miring"><i>I</i></button><button id="pu" class="ghost" title="Garis bawah"><u>U</u></button>
+              <button id="pal_left" class="ghost" title="Rata kiri">⇤</button><button id="pal_center" class="ghost" title="Tengah">↔</button><button id="pal_right" class="ghost" title="Rata kanan">⇥</button></span></span>
+            <span id="gFill"><label>Isi <input type="color" id="pf" title="Warna isi / latar" /></label><button id="pfx" class="ghost" title="Hapus warna isi">∅</button></span>
+            <span id="gStroke"><label>Garis <input type="color" id="pst" title="Warna garis tepi" /></label><button id="pstx" class="ghost" title="Hapus garis tepi">∅</button></span>
+            <span id="gHead"><label>Header <input type="color" id="phf" title="Warna header tabel" /></label></span>
+            <span id="gBar"><label>Batang <input type="color" id="pbar" title="Warna batang grafik" /></label></span>
+            <label>Transp. <input type="range" id="pop" min="5" max="100" title="Opasitas" /></label>
+            <label>Putar <input type="number" id="prot" min="-180" max="180" step="5" title="Rotasi (derajat)" /></label>
+            <button id="pfront" class="ghost" title="Bawa ke depan">⬆ Depan</button><button id="pback" class="ghost" title="Kirim ke belakang">⬇ Belakang</button><button id="pdup" class="ghost" title="Duplikat elemen (Ctrl+D)">⧉</button>
+          </div>
+          <div class="tbar props2">
+            <select id="addS" title="Tambah bentuk"><option value="">+ Bentuk</option><option value="rect">Persegi</option><option value="round">Persegi tumpul</option><option value="ellipse">Elips</option><option value="line">Garis</option></select>
+            <label>Latar slide <input type="color" id="sbg" title="Warna latar slide (mengganti template)" /></label><button id="sbgT" class="ghost">Latar template</button><button id="unbg" class="ghost" title="Jadikan latar template sebagai gambar biasa yang bisa digeser/dihapus">Lepas latar</button>
+          </div>
+          <div class="hint" style="margin-bottom:8px">Klik elemen untuk memilih lalu seret untuk memindah (teks, bentuk, gambar, grafik). Klik 2x pada teks untuk mengetik; sel tabel langsung bisa diketik (tabel dipindah lewat ✥). Kotak di pojok kanan-bawah = ubah ukuran. Delete = hapus, Ctrl+D = duplikat, tombol panah = geser halus (Shift = 10px).</div>
           <div class="stagewrap"><div id="stage" class="stage"></div></div>
         </div>
       </section>

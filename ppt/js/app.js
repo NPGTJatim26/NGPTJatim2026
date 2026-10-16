@@ -44,6 +44,23 @@
     $('#bsteps').innerHTML = STEPS.map((s, i) => `<li class="${i < step ? 'ok' : i === step ? 'on' : ''}">${s}</li>`).join('');
     $('#bfill').style.width = pct + '%'; $('#bmsg').textContent = msg || '';
   }
+  // Mode tanpa template: latar bergambar dibuang -> kanvas putih; teks putih (yang tadinya di atas template gelap) diganti warna gelap.
+  function stripTemplate(slides) {
+    const white = c => /^#?(fff|ffffff)$/i.test(String(c || '').trim());
+    slides.forEach(s => {
+      const had = s.bg; delete s.bg; s.bgColor = '#ffffff';
+      s.els = s.els.filter(e => e.t !== 'ph'); // bingkai foto sampul adalah bagian template
+      s.els.forEach(e => {
+        if (e.t !== 'text' || e.fill) return;
+        if (white(e.c)) e.c = '#10243a'; else if (/^#fdbf2d$/i.test(e.c || '')) e.c = '#e8650a';
+        if (e.y === 678) e.c = '#5b6b7c'; // teks footer
+        if (had === 'content' && e.x === 84 && e.y === 23) { e.x = 44; e.w = 1192 } // judul tak perlu menyisakan ruang logo
+      });
+      if (had === 'content') s.els.push({ t: 'shape', kind: 'rect', x: 44, y: 68, w: 1192, h: 3, fill: '#06416b', stroke: '', sw: 2 });
+      if (had === 'content' || had === 'outline') s.els.push({ t: 'shape', kind: 'rect', x: 44, y: 672, w: 1192, h: 2, fill: '#cbd5e1', stroke: '', sw: 2 });
+    });
+    return slides;
+  }
   $('#gen').onclick = async () => {
     try {
       // 1) simbologi dari simbologi.stylx (kalau gagal, peta tetap jalan dengan warna palet)
@@ -64,10 +81,10 @@
       if (tsBuf) { busy(true, 1, 82, 'Membaca ' + tsName + '…'); await wait(); try { ts = await readPoints(tsBuf.slice(0), () => { }, rows) } catch (e) { extra += ' TS dilewati: ' + e.message + '.'; console.warn(e) } }
       const nama = $('#kab').value.trim() || rows[0].WADMKK || 'Kabupaten/Kota';
       busy(true, 3, 86, 'Memuat basemap satelit…'); await wait();
-      const bm = await prepareBasemap(rows, $('#basemap').value, (d, t) => busy(true, 3, 86 + Math.round(d / t * 8), `Memuat basemap satelit ${d}/${t} tile…`));
+      const bm = await prepareBasemap(rows, $('#basemap').value, (d, t) => busy(true, 3, 86 + Math.round(d / t * 8), `Memuat basemap ${d}/${t} tile…`));
       if (bm.used === null) extra += ' Basemap gagal dimuat (jaringan/CORS diblokir) - peta memakai latar polos.'; else if (bm.fallback) extra += ' Google Satelit tidak bisa dimuat, dipakai Esri World Imagery.';
       busy(true, 3, 95, 'Menggambar peta (bisa memakan waktu beberapa detik)…'); await wait();
-      const res = buildSlides(rows, pages, nama, { hat, ts }); deck = res.slides; cur = 0; sel = -1; note = (rows.renamed.length ? ' Kolom dikenali: ' + rows.renamed.join(', ') + '.' : '') + (res.info.skipped.length ? ' Catatan: ' + res.info.skipped.join('; ') + '.' : '') + extra;
+      const res = buildSlides(rows, pages, nama, { hat, ts }); deck = $('#tplmode').value === 'none' ? stripTemplate(res.slides) : res.slides; cur = 0; sel = -1; note = (rows.renamed.length ? ' Kolom dikenali: ' + rows.renamed.join(', ') + '.' : '') + (res.info.skipped.length ? ' Catatan: ' + res.info.skipped.join('; ') + '.' : '') + extra;
       busy(true, 4, 100, 'Selesai'); await wait();
       $('#input').style.display = 'none'; $('#editor').classList.add('on'); show(); busy(false);
       $('#status').textContent = `${deck.length} slide dibuat untuk ${nama}. Klik teks/tabel untuk mengedit.` + note;
@@ -79,13 +96,15 @@
   const style = e => `left:${e.x}px;top:${e.y}px;width:${e.w}px;` + (e.h ? `height:${e.h}px;` : '');
   function svgBar(e) {
     const mx = Math.max(...e.items.map(i => i.v), 1), lw = e.w * (e.lwf || .42), ih = e.h / e.items.length, bh = Math.min(ih * .7, 22), tr = e.trunc || 34, fm = e.fmt === 'pct' ? v => NF(v) + '%' : e.fmt === 'int' ? v => (+v).toLocaleString('id-ID') : NF;
-    return `<svg width="${e.w}" height="${e.h}" font-family="Montserrat,Arial" font-size="12">` + e.items.map((i, n) => { const y = n * ih + (ih - bh) / 2, w = (e.w - lw - 80) * i.v / mx; return `<text x="${lw - 6}" y="${y + bh / 2 + 4}" text-anchor="end" fill="#10243a">${esc(i.k.length > tr ? i.k.slice(0, tr - 1) + '…' : i.k)}</text><rect x="${lw}" y="${y}" width="${Math.max(w, 1)}" height="${bh}" fill="${NAVY}"/><text x="${lw + w + 5}" y="${y + bh / 2 + 4}" fill="#10243a">${fm(i.v)}</text>` }).join('') + '</svg>';
+    return `<svg width="${e.w}" height="${e.h}" font-family="Montserrat,Arial" font-size="12">` + e.items.map((i, n) => { const y = n * ih + (ih - bh) / 2, w = (e.w - lw - 80) * i.v / mx; return `<text x="${lw - 6}" y="${y + bh / 2 + 4}" text-anchor="end" fill="#10243a">${esc(i.k.length > tr ? i.k.slice(0, tr - 1) + '…' : i.k)}</text><rect x="${lw}" y="${y}" width="${Math.max(w, 1)}" height="${bh}" fill="${e.color || NAVY}"/><text x="${lw + w + 5}" y="${y + bh / 2 + 4}" fill="#10243a">${fm(i.v)}</text>` }).join('') + '</svg>';
   }
   function svgPie(e) {
     const T = e.items.reduce((s, i) => s + i.v, 0) || 1, r = Math.min(e.h, e.w * .45) / 2 - 6, cx = r + 10, cy = e.h / 2, lh = Math.min(24, (e.h - 12) / e.items.length); let a = -Math.PI / 2, out = `<svg width="${e.w}" height="${e.h}" font-family="Montserrat,Arial" font-size="12">`;
-    e.items.forEach((i, n) => { const b = a + i.v / T * 2 * Math.PI, big = b - a > Math.PI ? 1 : 0, f = i.c || PAL[n % PAL.length];
+    e.items.forEach((i, n) => {
+      const b = a + i.v / T * 2 * Math.PI, big = b - a > Math.PI ? 1 : 0, f = i.c || PAL[n % PAL.length];
       out += i.v / T > .9999 ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${f}"/>` : `<path d="M${cx},${cy} L${cx + r * Math.cos(a)},${cy + r * Math.sin(a)} A${r},${r} 0 ${big} 1 ${cx + r * Math.cos(b)},${cy + r * Math.sin(b)} Z" fill="${f}" stroke="#fff"/>`;
-      out += `<rect x="${cx * 2 + 16}" y="${8 + n * lh}" width="12" height="12" fill="${f}"/><text x="${cx * 2 + 34}" y="${19 + n * lh}" fill="#10243a">${esc(i.k.length > 30 ? i.k.slice(0, 29) + '…' : i.k)} (${PC(i.v / T * 100)})</text>`; a = b });
+      out += `<rect x="${cx * 2 + 16}" y="${8 + n * lh}" width="12" height="12" fill="${f}"/><text x="${cx * 2 + 34}" y="${19 + n * lh}" fill="#10243a">${esc(i.k.length > 30 ? i.k.slice(0, 29) + '…' : i.k)} (${PC(i.v / T * 100)})</text>`; a = b
+    });
     return out + '</svg>';
   }
   function tableHTML(e, i, edit) {
@@ -93,29 +112,36 @@
     return `<table style="font-size:${e.sz}px"><colgroup>${cw.map(w => `<col style="width:${w * 100}%">`).join('')}</colgroup><tr style="height:${e.rh}px">${e.head.map((h, c) => `<th class="${isN(c) ? 'n' : ''}"${ce} data-i="${i}" data-r="-1" data-c="${c}">${esc(h)}</th>`).join('')}</tr>` +
       e.rows.map((r, ri) => `<tr style="height:${e.rh}px" class="${e.tot && ri === e.rows.length - 1 ? 'tot' : (e.bold || []).includes(ri) ? 'grp' : ''}">${r.map((v, c) => `<td class="${isN(c) ? 'n' : ''}"${ce} data-i="${i}" data-r="${ri}" data-c="${c}">${esc(v)}</td>`).join('')}</tr>`).join('') + '</table>';
   }
+  // Gaya tambahan per elemen: font, miring, garis bawah, transparansi, rotasi
+  const tstyle = e => (e.font ? `font-family:'${e.font}',Montserrat,Arial,sans-serif;` : '') + (e.i ? 'font-style:italic;' : '') + (e.u ? 'text-decoration:underline;' : '') + (e.op != null && e.op < 1 ? `opacity:${e.op};` : '') + (e.rot ? `transform:rotate(${e.rot}deg);` : '');
   function slideEl(s, n, edit) {
-    const d = document.createElement('div'); d.className = 'sl'; d.style.backgroundImage = `url(${BG[s.bg]})`;
+    const d = document.createElement('div'); d.className = 'sl';
+    if (s.bgColor) d.style.backgroundColor = s.bgColor;
+    d.style.backgroundImage = s.bg && BG[s.bg] ? `url(${BG[s.bg]})` : 'none';
     d.innerHTML = s.els.map((e, i) => {
-      const c = `class="el ${e.t}${edit && i === sel ? ' sel' : ''}" data-i="${i}"`;
-      if (e.t === 'text') return `<div ${c} ${edit && !e.auto ? 'contenteditable="true"' : ''} style="${style(e)}font-size:${e.sz}px;color:${e.c};font-weight:${e.b ? 700 : 400};text-align:${e.al};justify-content:${e.v === 'middle' ? 'center' : 'flex-start'};${e.fill ? 'background:' + e.fill + ';padding:0 10px;' : ''}">${esc(e.auto === 'pg' ? n + 1 : e.text)}</div>`;
-      if (e.t === 'table') return `<div ${c} style="${style(e)}">${tableHTML(e, i, edit)}</div>`;
-      if (e.t === 'bar') return `<div ${c} style="${style(e)}">${svgBar(e)}</div>`;
-      if (e.t === 'pie') return `<div ${c} style="${style(e)}">${svgPie(e)}</div>`;
+      const c = `class="el ${e.t}${edit && i === sel ? ' sel' : ''}" data-i="${i}"`, ts = tstyle(e);
+      // teks: tidak langsung bisa diketik (supaya bisa diseret seperti Canva); klik 2x untuk mengetik
+      if (e.t === 'text') return `<div ${c} ${e.auto ? 'data-auto="1"' : ''} style="${style(e)}font-size:${e.sz}px;color:${e.c};font-weight:${e.b ? 700 : 400};text-align:${e.al};justify-content:${e.v === 'middle' ? 'center' : 'flex-start'};${e.fill ? 'background:' + e.fill + ';padding:0 10px;' : ''}${ts}">${esc(e.auto === 'pg' ? n + 1 : e.text)}</div>`;
+      if (e.t === 'table') return `<div ${c} style="${style(e)}${e.c ? '--tc:' + e.c + ';' : ''}${e.hf ? '--hf:' + e.hf + ';' : ''}${e.cf ? '--cf:' + e.cf + ';' : ''}${ts}">${tableHTML(e, i, edit)}</div>`;
+      if (e.t === 'bar') return `<div ${c} style="${style(e)}${ts}">${svgBar(e)}</div>`;
+      if (e.t === 'pie') return `<div ${c} style="${style(e)}${ts}">${svgPie(e)}</div>`;
+      if (e.t === 'shape') return `<div ${c} style="${style(e)}background:${e.fill || 'transparent'};${e.stroke ? `border:${e.sw || 2}px solid ${e.stroke};` : ''}${e.kind === 'ellipse' ? 'border-radius:50%;' : e.kind === 'round' ? 'border-radius:18px;' : ''}${ts}"></div>`;
       if (e.t === 'ph') {
         const pc = `class="el ph${e.src ? '' : ' empty'}${edit && i === sel ? ' sel' : ''}" data-i="${i}"`;
         if (e.src) return `<div ${pc} style="${style(e)}" title="Klik untuk mengganti gambar"><img src="${e.src}" alt=""></div>`;
         return edit ? `<div ${pc} style="${style(e)}clip-path:polygon(${e.poly.map(p => p[0] + 'px ' + p[1] + 'px').join(',')})"><span class="phint">📷 Klik atau seret gambar ke sini</span></div>` : '';
       }
-      return `<div ${c} style="${style(e)}"><img src="${e.src}" alt=""></div>`;
+      return `<div ${c} style="${style(e)}${ts}"><img src="${e.src}" alt=""></div>`;
     }).join('');
     return d;
   }
-  function show(keepScroll) {
+  // renderStage = gambar ulang slide aktif saja (cepat, dipakai saat mengubah warna/ukuran); show = + thumbnail
+  function renderStage(keepScroll) {
     cur = Math.min(Math.max(cur, 0), deck.length - 1);
-    const st = $('#stage'); st.innerHTML = ''; st.append(slideEl(deck[cur], cur, true));
-    $('#stage').closest('.stagewrap').scrollTop = keepScroll ? $('#stage').closest('.stagewrap').scrollTop : 0;
-    placeHandles(); thumbs(); $('#cnt').textContent = `Slide ${cur + 1} / ${deck.length}`;
+    const st = $('#stage'), wrap = st.closest('.stagewrap'), top = wrap.scrollTop; st.innerHTML = ''; st.append(slideEl(deck[cur], cur, true));
+    wrap.scrollTop = keepScroll ? top : 0; placeHandles(); syncProps();
   }
+  function show(keepScroll) { renderStage(keepScroll); thumbs(); $('#cnt').textContent = `Slide ${cur + 1} / ${deck.length}` }
   function thumbs() { const t = $('#thumbs'); t.innerHTML = ''; deck.forEach((s, i) => { const w = document.createElement('div'); w.className = 'th' + (i === cur ? ' on' : ''); w.append(slideEl(s, i, false)); w.insertAdjacentHTML('beforeend', `<i>${i + 1}</i>`); w.onclick = () => { cur = i; sel = -1; show() }; t.append(w) }) }
   let tmr; const later = () => { clearTimeout(tmr); tmr = setTimeout(thumbs, 600) };
 
@@ -136,9 +162,9 @@
       const r = lajuRecalc(sl, el.t === 'table' ? +e.target.dataset.r : null);
       r.cells.forEach(([ri, ci, v]) => { const td = stage.querySelector(`[data-i="${ti}"][data-r="${ri}"][data-c="${ci}"]`); if (td && td !== e.target) td.textContent = v });
     }
-    later();GIY
+    later();
   });
-  const mark = () => { stage.querySelectorAll('.el').forEach(n => n.classList.toggle('sel', +n.dataset.i === sel)); placeHandles() };
+  const mark = () => { stage.querySelectorAll('.el').forEach(n => n.classList.toggle('sel', +n.dataset.i === sel)); placeHandles(); syncProps() };
   // Pegangan elemen terpilih: ✥ (pindah) di atas-kiri, kotak di pojok kanan-bawah (ubah ukuran).
   function placeHandles() {
     const sl = stage.firstChild; if (!sl) return; sl.querySelectorAll('.hd').forEach(h => h.remove());
@@ -150,34 +176,52 @@
   function dragHandle(e, act) {
     e.preventDefault(); const el = deck[cur].els[sel], n = stage.querySelector(`.el[data-i="${sel}"]`); if (!el || !n) return;
     const sc = stage.firstChild.getBoundingClientRect().width / 1280, sx = e.clientX, sy = e.clientY, ox = el.x, oy = el.y, ow = n.offsetWidth, oh = n.offsetHeight;
-    const mv = ev => { const dx = (ev.clientX - sx) / sc, dy = (ev.clientY - sy) / sc;
+    const mv = ev => {
+      const dx = (ev.clientX - sx) / sc, dy = (ev.clientY - sy) / sc;
       if (act === 'mv') { el.x = Math.round(ox + dx); el.y = Math.round(oy + dy); n.style.left = el.x + 'px'; n.style.top = el.y + 'px' }
-      else { el.w = Math.max(40, Math.round(ow + dx)); n.style.width = el.w + 'px';
+      else {
+        el.w = Math.max(40, Math.round(ow + dx)); n.style.width = el.w + 'px';
         if (el.t === 'table') { el.rh = Math.max(12, Math.round((oh + dy) / (el.rows.length + 1))); n.querySelectorAll('tr').forEach(r => r.style.height = el.rh + 'px'); if (el.sz > el.rh * .6) { el.sz = Math.max(8, Math.floor(el.rh * .6)); n.querySelector('table').style.fontSize = el.sz + 'px' } }
-        else { el.h = Math.max(20, Math.round(oh + dy)); n.style.height = el.h + 'px' } }
-      placeHandles() };
+        else { el.h = Math.max(20, Math.round(oh + dy)); n.style.height = el.h + 'px' }
+      }
+      placeHandles()
+    };
     const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); show(true) };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   }
   stage.addEventListener('mousedown', e => {
     const hd = e.target.closest('.hd'); if (hd) return dragHandle(e, hd.dataset.act);
     const n = e.target.closest('.el'); if (!n) { sel = -1; mark(); return }
+    const ae = document.activeElement; if (ae && ae.isContentEditable && !ae.contains(e.target)) ae.blur();   // selesai mengetik di elemen lain
     sel = +n.dataset.i; mark();
-    if (deck[cur].els[sel].t === 'ph') return;
-    // geser: tahan Alt untuk teks/tabel, atau seret langsung untuk gambar/grafik
-    const el = deck[cur].els[sel], editable = el.t === 'text' || el.t === 'table';
-    if (editable && !e.altKey) return; e.preventDefault();
+    const el = deck[cur].els[sel]; if (el.t === 'ph') return;
+    if (e.target.isContentEditable && !e.altKey) return;        // sedang mengetik di teks / sel tabel -> biarkan kursor bekerja
+    if (el.t === 'table' && !e.altKey) return;                  // tabel dipindah lewat pegangan ✥ (atau tahan Alt)
+    e.preventDefault();
     const sx = e.clientX, sy = e.clientY, ox = el.x, oy = el.y, sc = stage.firstChild.getBoundingClientRect().width / 1280;
-    const mv = ev => { el.x = Math.round(ox + (ev.clientX - sx) / sc); el.y = Math.round(oy + (ev.clientY - sy) / sc); n.style.left = el.x + 'px'; n.style.top = el.y + 'px' };
+    const mv = ev => { el.x = Math.round(ox + (ev.clientX - sx) / sc); el.y = Math.round(oy + (ev.clientY - sy) / sc); n.style.left = el.x + 'px'; n.style.top = el.y + 'px'; placeHandles() };
     const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); thumbs() };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
+  // klik 2x pada teks = mulai mengetik; keluar fokus = kembali bisa diseret
+  stage.addEventListener('dblclick', e => {
+    const n = e.target.closest('.el.text'); if (!n || n.dataset.auto) return;
+    n.contentEditable = 'true'; n.focus(); const r = document.createRange(); r.selectNodeContents(n); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  });
+  stage.addEventListener('focusout', e => { const n = e.target; if (n.matches && n.matches('.el.text[contenteditable]')) { n.removeAttribute('contenteditable'); later() } });
   const delEl = () => {
     if (sel < 0) return; const el = deck[cur].els[sel];
     if (el.t === 'ph') { if (el.src) { el.src = null; show(true) } return }
     deck[cur].els.splice(sel, 1); sel = -1; show(true)
   };
-  addEventListener('keydown', e => { if (e.key === 'Delete' && sel >= 0 && !e.target.isContentEditable && $('#editor').classList.contains('on')) delEl() });
+  addEventListener('keydown', e => {
+    if (!deck || !$('#editor').classList.contains('on') || e.target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || sel < 0) return;
+    const el = deck[cur].els[sel]; if (!el) return;
+    if (e.key === 'Delete') return delEl();
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); return dupEl() }
+    const st = e.shiftKey ? 10 : 1, d = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+    if (d && el.t !== 'ph') { e.preventDefault(); el.x += d[0]; el.y += d[1]; renderStage(true); later() }
+  });
   $('#delEl').onclick = delEl;
   const fs = d => { const el = deck[cur].els[sel]; if (!el || !(el.t === 'text' || el.t === 'table')) return; if (el.t === 'text') el.sz = Math.max(8, el.sz + d); else el.sz = Math.max(8, el.sz + d); show(true) };
   $('#fsUp').onclick = () => fs(1); $('#fsDn').onclick = () => fs(-1);
@@ -209,23 +253,61 @@
   stage.addEventListener('drop', e => { const n = e.target.closest('.el.ph'), f = e.dataTransfer.files[0]; if (n && f && /^image\//.test(f.type)) { e.preventDefault(); setPhoto(+n.dataset.i, f) } });
   $('#addT').onclick = () => { deck[cur].els.push({ t: 'text', x: 100, y: 300, w: 500, h: 60, text: 'Teks baru', sz: 20, c: '#10243a', al: 'left', v: 'top' }); sel = deck[cur].els.length - 1; show(true) };
 
-  // ---------- Simpan PDF (langsung diunduh: 1 slide = 1 halaman) ----------
+  // ---------- Panel properti: ubah gaya elemen terpilih (semua tersimpan di model `deck`, jadi tetap ada saat pindah slide) ----------
+  const G = id => document.getElementById(id), curEl = () => (deck && sel >= 0 ? deck[cur].els[sel] : null);
+  const hex6 = (c, fb) => { c = String(c || '').trim(); if (/^#[0-9a-f]{3}$/i.test(c)) c = '#' + c.slice(1).split('').map(x => x + x).join(''); return /^#[0-9a-f]{6}$/i.test(c) ? c : fb };
+  G('pfont').innerHTML = ['Montserrat', 'Plus Jakarta Sans', 'Arial', 'Calibri', 'Georgia', 'Times New Roman'].map(f => `<option>${f}</option>`).join('');
+  function syncProps() {
+    const bar = G('props'); if (!bar || !deck) return; const el = curEl(), t = el && el.t;
+    bar.classList.toggle('off', !el); G('sbg').value = hex6(deck[cur].bgColor, '#ffffff'); if (!el) return;
+    const show = (id, on) => G(id).style.display = on ? '' : 'none', tt = t === 'text', tb = t === 'table', sh = t === 'shape';
+    show('gTxt', tt || tb); show('gFill', tt || sh || tb); show('gStroke', sh); show('gHead', tb); show('gBar', t === 'bar'); show('gFmt', tt);
+    G('pc').value = hex6(el.c, '#10243a'); G('pf').value = hex6(tb ? el.cf : el.fill, '#ffffff'); G('phf').value = hex6(el.hf, '#fdbf2d'); G('pst').value = hex6(el.stroke, '#06416b'); G('pbar').value = hex6(el.color, NAVY);
+    G('pfont').value = el.font || 'Montserrat'; G('psz').value = el.sz || ''; G('pop').value = Math.round((el.op ?? 1) * 100); G('prot').value = el.rot || 0;
+    G('pb').classList.toggle('on', !!el.b); G('pi').classList.toggle('on', !!el.i); G('pu').classList.toggle('on', !!el.u);
+    ['left', 'center', 'right'].forEach(k => G('pal_' + k).classList.toggle('on', el.al === k));
+  }
+  // apply: ubah elemen terpilih -> gambar ulang slide aktif -> thumbnail menyusul
+  const apply = fn => { const el = curEl(); if (!el) return; fn(el); renderStage(true); later() };
+  G('pc').oninput = e => apply(el => { el.c = e.target.value });
+  G('pf').oninput = e => apply(el => { if (el.t === 'table') el.cf = e.target.value; else el.fill = e.target.value });
+  G('pfx').onclick = () => apply(el => { if (el.t === 'table') delete el.cf; else el.fill = '' });
+  G('phf').oninput = e => apply(el => { el.hf = e.target.value });
+  G('pst').oninput = e => apply(el => { el.stroke = e.target.value });
+  G('pstx').onclick = () => apply(el => { el.stroke = '' });
+  G('pbar').oninput = e => apply(el => { el.color = e.target.value });
+  G('pfont').onchange = e => apply(el => { el.font = e.target.value });
+  G('psz').oninput = e => apply(el => { const v = +e.target.value; if (v >= 6 && (el.t === 'text' || el.t === 'table')) el.sz = v });
+  G('pop').oninput = e => apply(el => { el.op = Math.max(.05, +e.target.value / 100) });
+  G('prot').oninput = e => apply(el => { el.rot = +e.target.value || 0 });
+  G('pb').onclick = () => apply(el => { el.b = el.b ? 0 : 1 }); G('pi').onclick = () => apply(el => { el.i = !el.i }); G('pu').onclick = () => apply(el => { el.u = !el.u });
+  ['left', 'center', 'right'].forEach(k => G('pal_' + k).onclick = () => apply(el => { el.al = k }));
+  const reorder = toFront => { const els = deck[cur].els, el = curEl(); if (!el) return; els.splice(sel, 1); toFront ? els.push(el) : els.unshift(el); sel = toFront ? els.length - 1 : 0; show(true) };
+  G('pfront').onclick = () => reorder(true); G('pback').onclick = () => reorder(false);
+  function dupEl() { const el = curEl(); if (!el || el.t === 'ph') return; const c = JSON.parse(JSON.stringify(el)); c.x += 20; c.y += 20; delete c.fx; deck[cur].els.push(c); sel = deck[cur].els.length - 1; show(true) }
+  G('pdup').onclick = dupEl;
+  // bentuk baru: persegi, persegi tumpul, elips, garis
+  G('addS').onchange = e => {
+    const k = e.target.value; e.target.value = ''; if (!k) return; const ln = k === 'line';
+    deck[cur].els.push({ t: 'shape', kind: k, x: 480, y: 260, w: ln ? 400 : 260, h: ln ? 4 : 140, fill: ln ? NAVY : YEL, stroke: '', sw: 2 }); sel = deck[cur].els.length - 1; show(true)
+  };
+  // latar slide: warna polos / kembali ke template / lepas jadi gambar (bisa digeser & dihapus)
+  G('sbg').oninput = e => { const s = deck[cur]; if (s.bg) s.bgKeep = s.bg; s.bg = null; s.bgColor = e.target.value; renderStage(true); later() };
+  G('sbgT').onclick = () => { const s = deck[cur]; s.bg = s.bg || s.bgKeep || 'content'; delete s.bgColor; renderStage(true); later() };
+  G('unbg').onclick = () => { const s = deck[cur]; if (!s.bg || !BG[s.bg]) return; s.els.unshift({ t: 'img', x: 0, y: 0, w: 1280, h: 720, src: BG[s.bg] }); s.bgKeep = s.bg; s.bg = null; sel = 0; show(true) };
+
+  // ---------- Simpan PDF (vektor: teks tajam & bisa diseleksi) lewat dialog cetak browser -> "Simpan sebagai PDF" ----------
   $('#pdf').onclick = async () => {
-    const b = $('#pdf'), old = b.textContent; b.disabled = true; let host;
+    const host = $('#pages'), b = $('#pdf'), old = b.textContent; b.disabled = true; b.textContent = 'Menyiapkan…';
     try {
-      if (!window.html2canvas || !window.jspdf) throw new Error('Pustaka PDF (jsPDF/html2canvas) belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+      host.innerHTML = ''; deck.forEach((s, i) => host.append(slideEl(s, i, false)));
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-20000px;top:0;width:1280px;height:720px;pointer-events:none'; document.body.append(host);
-      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'px', format: [1280, 720], compress: true, hotfixes: ['px_scaling'] });
-      for (let i = 0; i < deck.length; i++) {
-        b.textContent = `PDF ${i + 1}/${deck.length}…`; host.innerHTML = ''; const el = slideEl(deck[i], i, false); host.append(el);
-        await Promise.all([...el.querySelectorAll('img')].map(im => im.decode ? im.decode().catch(() => { }) : 0)); await wait();
-        const cv = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', logging: false, width: 1280, height: 720 });
-        if (i) pdf.addPage([1280, 720], 'landscape'); pdf.addImage(cv.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, 1280, 720);
-      }
-      saveBlob(pdf.output('blob'), baseName() + '.pdf');
-    } catch (err) { console.error(err); alert('Gagal membuat PDF: ' + err.message) }
-    if (host) host.remove(); b.disabled = false; b.textContent = old;
+      await Promise.all([...host.querySelectorAll('img')].map(im => im.decode ? im.decode().catch(() => { }) : 0));
+      const title = document.title; document.title = baseName();
+      const done = () => { host.innerHTML = ''; document.title = title; removeEventListener('afterprint', done) };
+      addEventListener('afterprint', done); window.print();
+    } catch (err) { console.error(err); alert('Gagal menyiapkan PDF: ' + err.message) }
+    b.disabled = false; b.textContent = old;
   };
 
   // ---------- Simpan PPTX ----------
@@ -252,32 +334,35 @@
         const load = u => new Promise((ok, no) => { const s = document.createElement('script'); s.src = u; s.onload = ok; s.onerror = () => no(new Error(u)); document.head.append(s) });
         for (const u of ['https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js']) { try { await load(u); if (typeof PptxGenJS !== 'undefined') break } catch (e) { console.warn('Gagal memuat', e.message) } }
         if (typeof PptxGenJS === 'undefined') throw new Error('Pustaka PptxGenJS tidak bisa dimuat dari semua sumber. Periksa koneksi internet, atau matikan ad-blocker/firewall untuk CDN, lalu muat ulang halaman (Ctrl+F5).');
-      }      if (!deck || !deck.length) throw new Error('Belum ada slide.');
+      } if (!deck || !deck.length) throw new Error('Belum ada slide.');
       const px = new PptxGenJS(); px.layout = 'LAYOUT_WIDE'; const k = 13.333 / 1280, F = 'Montserrat', cache = new Map();
       const img = async u => { if (!cache.has(u)) cache.set(u, await safeImage(u)); return cache.get(u) };
       const bg = {}; for (const n in BG) { try { bg[n] = await img(BG[n]) } catch (e) { warn.push('latar ' + n) } }
       for (let n = 0; n < deck.length; n++) {
         const s = deck[n]; b.textContent = `PPTX ${n + 1}/${deck.length}…`;
-        const sl = px.addSlide(); if (bg[s.bg]) sl.background = { data: bg[s.bg] };
+        const sl = px.addSlide(); if (s.bg && bg[s.bg]) sl.background = { data: bg[s.bg] }; else sl.background = { color: hx(s.bgColor, 'FFFFFF') };
         for (let i = 0; i < s.els.length; i++) {
           const e = s.els[i];
           try {
             const pos = { x: num(e.x) * k, y: num(e.y) * k, w: Math.max(.1, num(e.w) * k), h: Math.max(.1, num(e.h || 30) * k) }, fsz = v => Math.max(6, Math.round(num(v) * 75) / 100);
-            if (e.t === 'text') sl.addText(clean(e.auto === 'pg' ? n + 1 : e.text), { ...pos, fontFace: F, fontSize: fsz(e.sz), bold: !!e.b, color: hx(e.c), align: ['left', 'center', 'right', 'justify'].includes(e.al) ? e.al : 'left', valign: e.v === 'middle' ? 'middle' : 'top', margin: e.fill ? [0, 8, 0, 8] : 0, ...(e.fill ? { fill: { color: hx(e.fill) } } : {}) });
+            if (e.t === 'text') sl.addText(clean(e.auto === 'pg' ? n + 1 : e.text), { ...pos, fontFace: e.font || F, italic: !!e.i, ...(e.u ? { underline: { style: 'sng' } } : {}), rotate: num(e.rot), fontSize: fsz(e.sz), bold: !!e.b, color: hx(e.c), align: ['left', 'center', 'right', 'justify'].includes(e.al) ? e.al : 'left', valign: e.v === 'middle' ? 'middle' : 'top', margin: e.fill ? [0, 8, 0, 8] : 0, ...(e.fill ? { fill: { color: hx(e.fill) } } : {}) });
             else if (e.t === 'table') {
               const nc = e.head.length, cw0 = (e.cw && e.cw.length === nc ? e.cw : e.head.map(() => 1 / nc)), sum = cw0.reduce((a, c) => a + c, 0) || 1, cw = cw0.map(w => w / sum * pos.w), isN = c => (e.num || []).includes(c);
-              const head = e.head.map((h, c) => ({ text: clean(h), options: { bold: true, fill: { color: 'FDBF2D' }, color: '10243A', align: isN(c) ? 'right' : 'left' } }));
-              const rows = e.rows.map((r, ri) => Array.from({ length: nc }, (_, c) => { const last = e.tot && ri === e.rows.length - 1, grp = (e.bold || []).includes(ri); return { text: clean(r[c]), options: { align: isN(c) ? 'right' : 'left', bold: !!(last || grp), color: '10243A', ...(last ? { fill: { color: 'E4ECF4' } } : grp ? { fill: { color: 'FDF1D6' } } : {}) } } }));
-              sl.addTable([head, ...rows], { x: pos.x, y: pos.y, w: pos.w, colW: cw, rowH: Math.max(.15, num(e.rh) * k), fontFace: F, fontSize: fsz(e.sz), border: { type: 'solid', color: '9FB2C4', pt: .75 }, valign: 'middle' });
+              const head = e.head.map((h, c) => ({ text: clean(h), options: { bold: true, fill: { color: hx(e.hf, 'FDBF2D') }, color: hx(e.c, '10243A'), align: isN(c) ? 'right' : 'left' } }));
+              const rows = e.rows.map((r, ri) => Array.from({ length: nc }, (_, c) => { const last = e.tot && ri === e.rows.length - 1, grp = (e.bold || []).includes(ri); return { text: clean(r[c]), options: { align: isN(c) ? 'right' : 'left', bold: !!(last || grp), color: hx(e.c, '10243A'), ...(last ? { fill: { color: 'E4ECF4' } } : grp ? { fill: { color: 'FDF1D6' } } : e.cf ? { fill: { color: hx(e.cf) } } : {}) } } }));
+              sl.addTable([head, ...rows], { x: pos.x, y: pos.y, w: pos.w, colW: cw, rowH: Math.max(.15, num(e.rh) * k), fontFace: e.font || F, fontSize: fsz(e.sz), border: { type: 'solid', color: '9FB2C4', pt: .75 }, valign: 'middle' });
             } else if (e.t === 'bar') {
               const it = (e.items || []).map(x => ({ k: clean(x.k).slice(0, 120), v: num(x.v) }));
               if (!it.length) continue; // grafik kosong membuat file tidak valid
-              sl.addChart(px.charts.BAR, [{ name: 'Luas (Ha)', labels: it.map(x => x.k), values: it.map(x => x.v) }], { ...pos, barDir: 'bar', catAxisOrientation: 'maxMin', chartColors: [hx(NAVY)], showValue: true, dataLabelFormatCode: e.fmt === 'pct' ? '#,##0.00"%"' : e.fmt === 'int' ? '#,##0' : '#,##0.00', dataLabelFontSize: 9, catAxisLabelFontSize: 9, valAxisHidden: true, valGridLine: { style: 'none' }, showLegend: false, barGapWidthPct: 40 });
+              sl.addChart(px.charts.BAR, [{ name: 'Luas (Ha)', labels: it.map(x => x.k), values: it.map(x => x.v) }], { ...pos, barDir: 'bar', catAxisOrientation: 'maxMin', chartColors: [hx(e.color || NAVY)], showValue: true, dataLabelFormatCode: e.fmt === 'pct' ? '#,##0.00"%"' : e.fmt === 'int' ? '#,##0' : '#,##0.00', dataLabelFontSize: 9, catAxisLabelFontSize: 9, valAxisHidden: true, valGridLine: { style: 'none' }, showLegend: false, barGapWidthPct: 40 });
             } else if (e.t === 'pie') {
               const it = (e.items || []).map((x, j) => ({ k: clean(x.k).slice(0, 120), v: num(x.v), c: hx(x.c || PAL[j % PAL.length], hx(PAL[j % PAL.length])) })).filter(x => x.v > 0);
               if (!it.length) continue;
               sl.addChart(px.charts.PIE, [{ name: 'Luas (Ha)', labels: it.map(x => x.k), values: it.map(x => x.v) }], { ...pos, chartColors: it.map(x => x.c), showLegend: true, legendPos: 'r', legendFontSize: 9, showPercent: true, showValue: false, dataLabelColor: 'FFFFFF', dataLabelFontSize: 9 });
-            } else if (e.t === 'img' || (e.t === 'ph' && e.src)) sl.addImage({ data: await img(e.src), ...pos });
+            } else if (e.t === 'shape') {
+              const ST = px.ShapeType, shp = e.kind === 'ellipse' ? ST.ellipse : e.kind === 'round' ? ST.roundRect : ST.rect;
+              sl.addShape(shp, { ...pos, h: Math.max(.02, num(e.h) * k), rotate: num(e.rot), fill: e.fill ? { color: hx(e.fill), transparency: Math.round((1 - (e.op ?? 1)) * 100) } : { type: 'none' }, line: e.stroke ? { color: hx(e.stroke), width: Math.max(.5, num(e.sw || 2) * .75) } : { type: 'none' } });
+            } else if (e.t === 'img' || (e.t === 'ph' && e.src)) sl.addImage({ data: await img(e.src), ...pos, rotate: num(e.rot), transparency: Math.round((1 - (e.op ?? 1)) * 100) });
           } catch (err) { console.warn('PPTX: elemen dilewati', n + 1, e.t, err); warn.push(`slide ${n + 1} (${e.t})`) }
         }
         await wait(); // beri napas ke browser agar tombol/progres tidak membeku
