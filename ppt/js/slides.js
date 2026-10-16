@@ -215,7 +215,7 @@ function buildSlides(R, pages, nama, ctx = {}) {
       sub(40, 372, 540, 'Luas Wilayah per Kecamatan'));
     if (N) { const ft = simpleTable(40, 406, 540, 660 - 406, ['Kecamatan', 'Luas (Ha)', '%'], kc, i => [i.k, NF(i.v), PC(i.p)], { cw: [.08, .5, .24, .18], num: [2, 3], sz: 12, rh: 26, page: 1, tot: ['', 'Jumlah', NF(total(kc)), '100,00%'] }); s.els.push(...ft.els) }
     else s.els.push(tx(40, 410, 540, 40, '[Kolom kecamatan (WADMKC) tidak terisi di shapefile]', { sz: 13 }));
-    s.els.push(mapEl(catMap(R, r => r.WADMKC, 30, { ...mapOpt, lw: 330 }))); return s
+    s.els.push(mapEl(catMap(R, r => r.WADMKC, 30, { ...mapOpt, lw: 330, labels: true }))); return s
   }));
 
   // ===== 4. Survei Lapangan (TS.zip) =====

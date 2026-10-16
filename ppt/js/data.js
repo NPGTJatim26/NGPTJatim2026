@@ -378,7 +378,7 @@ function renderMap(rows, colorOf, legend, opt = {}) {
   if (withAdmin) {
     const T = traceAdmin(kecs.size > 1 ? [...kecs.values()] : [rows], P, W, H);
     strokeLines(x, T.kec, LC); strokeLines(x, T.kab, LK);
-    if (kecs.size > 1 && kecs.size <= 40 && opt.labels !== false) {
+    if (kecs.size > 1 && kecs.size <= 40 && opt.labels === true) {
       x.font = 'bold 13px sans-serif'; x.textAlign = 'center'; x.lineJoin = 'round';
       kecs.forEach((rs, k) => { const b = bboxAll(rs), [lx, ly] = P([(b[0] + b[1]) / 2, (b[2] + b[3]) / 2]); x.strokeStyle = B ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)'; x.lineWidth = 3.5; x.strokeText(k, lx, ly); x.fillStyle = B ? '#fff' : '#10243a'; x.fillText(k, lx, ly) })
     }
