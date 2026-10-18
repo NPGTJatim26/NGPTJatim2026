@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout Peta Otomatis | NPGT Regional Jatim 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+try { document.documentElement.dataset.theme = localStorage.theme || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light"); }
+catch (e) { document.documentElement.dataset.theme = "light"; }
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand-link" href="../index.html" aria-label="Kembali ke halaman utama"><img class="brand-logo" src="../assets/logo-npgt-regional-2026-jawa-timur.svg" alt="NPGT Regional 2026 Jawa Timur"></a>
+  <span class="brand-name"><small>Portal kerja</small>Layout Peta Otomatis</span>
+  <span class="sp"></span>
+  <a class="home-link" href="../index.html">Semua alat</a>
+  <button class="th" id="theme" title="Ganti tema" aria-label="Ganti tema">
+    <svg class="ic moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="ic sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+</header>
+<div class="workspace">
+<aside>
+  <div class="panel-heading">
+    <div><h1>Layout Peta Otomatis</h1><p class="mu">Pengolahan berjalan di browser; berkas tidak diunggah.</p></div>
+  </div>
+  <section class="settings-section" aria-labelledby="primary-data-heading">
+    <h2 id="primary-data-heading">DJPA dan Titik Survei</h2>
+    <div class="drop-grid">
+      <div class="dropzone" role="button" tabindex="0" aria-label="Unggah atau seret ZIP Peta DJPA" data-file-input="fDjpa">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Peta DJPA</strong><span class="drop-hint">ZIP shapefile</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fDjpa" accept=".zip" hidden>
+      </div>
+      <div class="dropzone" role="button" tabindex="0" aria-label="Unggah atau seret ZIP Titik Survei" data-file-input="fSrv">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Titik Survei</strong><span class="drop-hint">ZIP · opsional untuk Peta Kerja</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fSrv" accept=".zip" hidden>
+      </div>
+    </div>
+  </section>
+  <section class="settings-section" aria-labelledby="basemap-heading">
+    <h2 id="basemap-heading">Peta dasar</h2>
+    <div class="drop-grid">
+      <div class="dropzone" role="button" tabindex="0" data-file-input="fDasar">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Peta Dasar PT LN</strong><span class="drop-hint">ZIP shapefile</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fDasar" accept=".zip" hidden>
+      </div>
+      <div class="dropzone" role="button" tabindex="0" data-file-input="fKab">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Peta Dasar AR</strong><span class="drop-hint">ZIP shapefile</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fKab" accept=".zip" hidden>
+      </div>
+      <div class="dropzone" role="button" tabindex="0" data-file-input="fBati">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Batimetri</strong><span class="drop-hint">ZIP berisi .tif</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fBati" accept=".zip" hidden>
+      </div>
+      <div class="dropzone" role="button" tabindex="0" data-file-input="fPantai">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Garis Pantai</strong><span class="drop-hint">ZIP shapefile</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fPantai" accept=".zip" hidden>
+      </div>
+    </div>
+    <a class="drive-link" href="https://drive.google.com/drive/folders/1bbEIBm-rSeB74DI9rKi90NxK-IlNAJMK?usp=sharing" target="_blank" rel="noopener noreferrer">Buka folder data peta dasar di Google Drive <span aria-hidden="true">↗</span></a>
+    <div id="manualSim" hidden>
+      <div class="dropzone" role="button" tabindex="0" data-file-input="fSim">
+        <span class="drop-icon" aria-hidden="true">↑</span><strong>Simbologi manual</strong><span class="drop-hint">Simbol_semua, RTR, Toponim (.stylx)</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fSim" accept=".stylx" multiple hidden>
+      </div>
+    </div>
+  </section>
+  <section class="settings-section" aria-labelledby="settings-heading">
+    <h2 id="settings-heading">Pengaturan</h2>
+    <div class="field-grid">
+      <label>Tema <select id="tema"></select></label>
+      <label>Citra peta kerja <select id="bm"><option value="wb">Esri Wayback (terbaru)</option><option value="g">Google Satellite</option></select></label>
+      <label>Tahun <input id="tahun" value="2026"></label>
+      <label>Jenis rencana tata ruang<select id="rencana"><option value="rdtr">Rencana Detail Tata Ruang (RDTR)</option><option value="rtrw">Rencana Tata Ruang Wilayah (RTRW)</option></select></label>
+      <label>Skala inset (1:N)<input id="skInset" type="number" value="5000000" step="50000"></label>
+    </div>
+    <label class="check-field"><input type="checkbox" id="batasLuar" checked> Tampilkan batas provinsi dan kab/kota di luar wilayah kerja</label>
+    <label class="check-field"><input type="checkbox" id="labelKecamatan" checked> Tampilkan label kecamatan (WADMKC)</label>
+    <label>Sumber data (satu baris per butir)<textarea id="sumber" rows="5">Sumber :
+1. Citra Tegak Satelit Resolusi Tinggi (CTSRT) Pleiades Badan Informasi Geospasial (BIG) Perekaman Tahun 2015 dan Tahun 2022
+2. Foto Udara Kementerian ATR/BPN Perekaman Tahun 2024
+3. Peta Dasar : Batas Administrasi Provinsi, Kabupaten/Kota, dan Kecamatan Badan Informasi Geospasial (BIG) Tahun 2025
+4. Batimetri : Batimetri Nasional Badan Informasi Geospasial (BIG) Tahun 2018
+5. Neraca Penatagunaan Tanah (NPGT) Kota Pasuruan Tahun 2026
+6. Survei Lapangan Tahun 2026
+7. Pengolahan Data Tahun 2026
+
+Proyeksi Peta : Cylindrical Equal Area, Datum : WGS-1984
+
+Peta ini bukan referensi resmi mengenai garis-garis batas administrasi nasional dan internasional.</textarea></label>
+  </section>
+</aside>
+<main class="preview-panel">
+  <div class="preview-frame"><canvas id="cv"></canvas></div>
+  <section class="map-output" aria-label="Aksi dan keterangan peta">
+    <div class="actions">
+      <button id="go">Buat Layout</button>
+      <button id="png" class="sec">Unduh PNG (300 dpi)</button>
+      <button id="pdf" class="sec">Unduh PDF (A3, 300 dpi)</button>
+    </div>
+    <p id="st" class="mu" role="status" aria-live="polite">Menunggu data.</p>
+  </section>
+</main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@3.0.5/dist-browser/geotiff.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.22.0/dist/proj4.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+<script src="logo.js"></script>
+<script src="font.js"></script>
+<script src="app.js"></script>
+<script>
+document.getElementById("theme").onclick = () => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  try { localStorage.theme = root.dataset.theme; } catch (e) {}
+};
+</script>
+</body>
+</html>

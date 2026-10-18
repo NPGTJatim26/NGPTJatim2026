@@ -19,9 +19,9 @@ drop.onclick=()=>fi.click();fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
 ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over')}));
 drop.addEventListener('drop',e=>e.dataTransfer.files[0]&&load(e.dataTransfer.files[0]));
 document.getElementById('dl').onclick=async()=>{const b=document.getElementById('dl');b.disabled=true;b.textContent='Menyiapkan…';try{await downloadXLSX()}finally{b.disabled=false;b.textContent='⬇ Download Excel (31 sheet)'}};
-// Tema terang/gelap. Default selalu dark; toggle hanya berlaku selama halaman terbuka.
+// Tema terang/gelap mengikuti preferensi portal.
 const tb=document.getElementById('theme'),root=document.documentElement;
 const paintTheme=()=>{tb.textContent=root.dataset.theme==='light'?'☾':'☀'};
-tb.onclick=()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';paintTheme()};
+tb.onclick=()=>{root.dataset.theme=root.dataset.theme==='light'?'dark':'light';try{localStorage.theme=root.dataset.theme}catch(e){}paintTheme()};
 paintTheme();
 render();

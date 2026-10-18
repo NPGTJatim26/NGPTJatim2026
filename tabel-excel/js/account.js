@@ -9,11 +9,11 @@
   const css = document.createElement('style');
   css.textContent = `
   html.guard body{visibility:hidden}
-  header button.hb{margin-left:0;height:36px;padding:0 14px;border-radius:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:13px}
-  header button.hb:hover{background:rgba(255,255,255,.24)}
+  header button.hb{margin-left:0;height:36px;padding:0 14px;border-radius:8px;background:var(--card);border:1px solid var(--bd);color:var(--tx);font-size:13px}
+  header button.hb:hover{background:var(--card2)}
   #theme{margin-left:0!important}
   .hsp{flex:1}
-  .usr{font-size:12px;color:#fff;opacity:.85;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .usr{font-size:12px;color:var(--mut);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .trial{background:#f59e0b;color:#3b2300;font-weight:700;font-size:12px;padding:4px 10px;border-radius:999px;white-space:nowrap}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:50;padding:16px}
   .modal[hidden]{display:none}

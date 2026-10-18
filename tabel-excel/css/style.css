@@ -1,20 +1,20 @@
 /* style.css - tema teal gelap (mengikuti halaman login). Ganti warna cukup di blok :root di bawah. */
-:root{--bg:#0a1214;--card:#111b1d;--card2:#16242a;--bd:#223235;--tx:#e8f1f0;--mut:#8aa09e;
- --acc:#2dd4bf;--acc-tx:#04211d;--th:#0f3d38;--th-tx:#e6fffb;--alt:#142023;--cell-bd:#22343a;
- --hero:linear-gradient(135deg,#14806f 0%,#0d3a36 100%);--ok:#22c55e;--bad:#ef4444}
-:root[data-theme=light]{--bg:#f1f7f6;--card:#ffffff;--card2:#eaf3f1;--bd:#d3e2df;--tx:#0f1f1e;--mut:#587270;
- --acc:#0d9488;--acc-tx:#ffffff;--th:#0f766e;--th-tx:#ffffff;--alt:#f3f9f8;--cell-bd:#d3e2df;
- --hero:linear-gradient(135deg,#17a592 0%,#0f766e 100%);--ok:#16a34a;--bad:#dc2626}
+:root{--bg:#091311;--card:#101d19;--card2:#14241f;--bd:#263a32;--tx:#eef5ef;--mut:#9bad9f;
+ --acc:#a5d66f;--acc-tx:#15220d;--th:#31542a;--th-tx:#eef5ef;--alt:#14241f;--cell-bd:#263a32;
+ --hero:#091311;--ok:#22c55e;--bad:#ef4444}
+:root[data-theme=light]{--bg:#f5f7f1;--card:#ffffff;--card2:#f0f5e9;--bd:#dce5d5;--tx:#17251c;--mut:#647568;
+ --acc:#477d2c;--acc-tx:#ffffff;--th:#477d2c;--th-tx:#ffffff;--alt:#f0f5e9;--cell-bd:#dce5d5;
+ --hero:#f5f7f1;--ok:#16a34a;--bad:#dc2626}
 *{box-sizing:border-box}
 body{margin:0;font-family:"Plus Jakarta Sans",system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx);letter-spacing:-.01em}
-header{background:var(--hero);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
+header{background:var(--hero);color:var(--tx);padding:14px 24px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--bd)}
 .brand-link{display:inline-flex;align-items:center;flex:none;border-radius:8px}
 .brand-link:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
 .brand-logo{display:block;width:44px;height:44px;object-fit:contain}
 header h1{margin:0;font-size:17px;font-weight:700}
 header small{display:block;font-size:12px;opacity:.8;font-weight:400;margin-top:1px}
-#theme{margin-left:auto;width:36px;height:36px;padding:0;border-radius:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);font-size:16px;line-height:1}
-#theme:hover{background:rgba(255,255,255,.24)}
+#theme{margin-left:auto;width:36px;height:36px;padding:0;border-radius:8px;background:var(--card);color:var(--tx);border:1px solid var(--bd);font-size:16px;line-height:1}
+#theme:hover{background:var(--card2)}
 main{padding:20px 24px;max-width:1500px;margin:auto}
 #drop,
 #drop2{border:1.5px dashed var(--bd);border-radius:14px;background:var(--card);padding:24px;text-align:center;cursor:pointer;color:var(--mut);transition:border-color .15s,background .15s}

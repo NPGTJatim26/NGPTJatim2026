@@ -8,7 +8,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;700;800&display=swap" rel="stylesheet" />
     <script>
-      document.documentElement.dataset.theme = "dark";
+      try {
+        document.documentElement.dataset.theme = localStorage.theme || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light");
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
       document.documentElement.classList.add("guard");
     </script>
     <link rel="stylesheet" href="css/ppt.css" />
@@ -18,14 +22,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">    </script>
   </head>
   <body>
     <header>
-      <div class="logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></svg>
-      </div>
-      <h1>Generate PPT<small>Template presentasi + data shapefile → slide siap edit &amp; simpan</small></h1>
+      <a class="brand-link" href="../index.html" aria-label="Kembali ke halaman utama"><img class="brand-logo" src="../assets/logo-npgt-regional-2026-jawa-timur.svg" alt="NPGT Regional 2026 Jawa Timur" /></a>
+      <h1>Generator Presentasi<small>Template presentasi + data shapefile → slide siap edit &amp; simpan</small></h1>
       <button id="theme" title="Ganti tema" aria-label="Ganti tema"></button>
     </header>
     <main>

@@ -20,7 +20,14 @@
     }
     document.documentElement.classList.remove('guard');
   })();
-  const root = document.documentElement, tb = $('#theme'); tb.onclick = () => { root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'; tb.textContent = root.dataset.theme === 'light' ? '☾' : '☀' }; tb.textContent = '☀';
+  const root = document.documentElement, tb = $('#theme');
+  const paintTheme = () => { tb.textContent = root.dataset.theme === 'light' ? '☾' : '☀' };
+  tb.onclick = () => {
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+    try { localStorage.theme = root.dataset.theme } catch (e) {}
+    paintTheme();
+  };
+  paintTheme();
 
   // ---------- Input (dengan animasi progress unggah) ----------
   const ready = () => { $('#gen').disabled = !dataBuf };

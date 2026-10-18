@@ -1,0 +1,63 @@
+:root{color-scheme:dark;--bg:#091311;--surface:#101d19;--surface-2:#14241f;--bd:#263a32;--tx:#eef5ef;--mu:#9bad9f;--ac:#a5d66f;--ac-tx:#15220d;--glow:rgba(165,214,111,.14)}
+:root[data-theme=light]{color-scheme:light;--bg:#f5f7f1;--surface:#fff;--surface-2:#f0f5e9;--bd:#dce5d5;--tx:#17251c;--mu:#647568;--ac:#477d2c;--ac-tx:#fff;--glow:rgba(106,157,70,.12)}
+*{box-sizing:border-box}
+html{min-width:320px}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;font:14px/1.55 "Plus Jakarta Sans",system-ui,Segoe UI,Arial,sans-serif;background:radial-gradient(ellipse at 50% -20%,var(--glow),transparent 58%),var(--bg);color:var(--tx);letter-spacing:-.015em}
+.top{width:min(1160px,100%);margin:0 auto;display:flex;align-items:center;gap:13px;padding:16px 28px}
+.brand-link{display:inline-flex;align-items:center;flex:none;border-radius:10px}
+.brand-link:focus-visible,a:focus-visible{outline:3px solid var(--ac);outline-offset:3px}
+.brand-logo{display:block;width:44px;height:44px;object-fit:contain}
+.brand-name{font-size:14px;line-height:1.4;font-weight:700}
+.brand-name small{display:block;color:var(--mu);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.sp{flex:1}
+.home-link{color:var(--mu);font-size:13px;text-decoration:none}
+.home-link:hover{color:var(--ac)}
+.th{width:40px;height:40px;border-radius:12px;border:1px solid var(--bd);background:var(--surface);color:var(--tx);display:grid;place-items:center}
+.th:hover{background:var(--surface-2);border-color:var(--ac)}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.th .sun{display:none}[data-theme=dark] .th .sun{display:block}[data-theme=dark] .th .moon{display:none}
+aside{width:min(400px,100%);max-height:100%;padding:16px;overflow:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--bd);border-radius:16px;scrollbar-color:var(--bd) transparent}
+aside h1{font-size:18px;margin:0 0 3px}
+.panel-heading{padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.panel-heading p{margin:0}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ac);margin:13px 0 7px}
+.settings-section{margin-top:10px;padding:12px;border:1px solid var(--bd);border-radius:12px;background:var(--bg)}
+.settings-section h2{margin:0 0 9px}
+.drop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.dropzone{position:relative;min-width:0;min-height:93px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:9px 10px;border:1px dashed var(--bd);border-radius:10px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.dropzone:hover,.dropzone:focus-visible,.dropzone.dragover{border-color:var(--ac);background:var(--surface-2);outline:none}
+.dropzone.dragover{transform:scale(1.015)}
+.dropzone.has-file{border-style:solid;border-color:color-mix(in srgb,var(--ac) 55%,var(--bd))}
+.dropzone strong{font-size:12px;color:var(--tx)}
+.drop-icon{position:absolute;top:8px;right:9px;color:var(--ac);font-size:16px;font-weight:700}
+.drop-hint,.drop-file{max-width:100%;font-size:10px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere}
+.drop-file{font-size:10px}
+.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 9px}
+label{display:block;min-width:0;margin:6px 0;font-size:11px;color:var(--mu);line-height:1.45}
+input,select{width:100%;min-width:0;margin-top:3px;padding:7px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;font-size:12px}
+input[type=file]{padding:7px;color:var(--mu);font-size:12px}
+input[type=file]::file-selector-button{margin-right:8px;padding:6px 9px;border:1px solid var(--bd);border-radius:6px;background:var(--surface-2);color:var(--tx);font:inherit;cursor:pointer}
+input[type=checkbox]{width:auto;flex:none;margin:0;accent-color:var(--ac)}
+.check-field{display:flex;align-items:flex-start;gap:8px}
+textarea{width:100%;margin-top:3px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:11px/1.45 "Plus Jakarta Sans",system-ui,Arial,sans-serif;resize:vertical}
+.drive-link{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--surface-2);color:var(--tx);font-size:11px;font-weight:600;text-decoration:none}
+.drive-link:hover{border-color:var(--ac);color:var(--ac)}
+.actions{display:grid;grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(0,1fr));gap:8px}
+.actions button{width:100%;min-width:0;margin:0;padding:9px 8px;font-size:12px}
+button{width:100%;margin-top:10px;padding:10px;border:1px solid var(--ac);border-radius:9px;background:var(--ac);color:var(--ac-tx);font:inherit;font-weight:700;cursor:pointer}
+button.sec{background:var(--surface-2);color:var(--tx);border-color:var(--bd)}
+button:hover:not(:disabled){filter:brightness(1.08)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.mu{color:var(--mu);font-size:12px}
+.workspace{flex:1;min-height:0;height:calc(100vh - 76px);width:min(1440px,100%);margin:0 auto;padding:0 28px 24px;display:grid;grid-template-columns:minmax(320px,400px) minmax(0,1fr);gap:16px;align-items:stretch}
+.workspace main.preview-panel{min-width:0;min-height:0;overflow:auto;padding:0;display:block}
+.preview-frame{overflow:auto}
+canvas{display:block;width:100%;height:auto;flex:none;background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.12)}
+.map-output{margin-top:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--bd);border-radius:12px}
+.map-output p{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--bd);min-height:22px;white-space:pre-wrap}
+.map-output p:empty{display:none}
+@media(max-width:800px){.top{padding:14px 20px}.workspace{height:auto;grid-template-columns:1fr;padding:0 20px 20px}.workspace main.preview-panel{min-height:0;overflow:visible}aside{width:100%;max-height:none}.drop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.drop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.top{gap:9px;padding:12px 14px}.brand-logo{width:38px;height:38px}.brand-name{font-size:12px}.home-link{font-size:12px}.workspace{padding:0 14px 16px}.field-grid{gap:0 7px}.dropzone{min-height:88px;padding:8px}}
+@media(max-width:560px){.actions{grid-template-columns:1fr 1fr}.actions #go{grid-column:1/-1}.map-output{padding:10px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
