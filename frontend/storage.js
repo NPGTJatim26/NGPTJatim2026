@@ -9,13 +9,13 @@
         document.documentElement.classList.remove('guard');
         const pick = $('#pick');
         pick.insertAdjacentHTML('beforebegin', '<span class="usr" title="Data yang diunggah tidak disimpan">Mode Trial · data tidak disimpan</span><button class="btn ghost" id="tlogin">Masuk / Daftar</button><button class="btn ghost" id="thome">Beranda</button>');
-        $('#tlogin').onclick = () => location.href = 'login.html?next=index.html';
+        $('#tlogin').onclick = () => location.href = '../index.html?auth=1&next=frontend/index.html';
         $('#thome').onclick = () => location.href = '../index.html';
         return;
     }
 
     const { data: { session } } = await supa.auth.getSession();
-    if (!session) { location.replace('../index.html'); return }
+    if (!session) { location.replace('../index.html?auth=1&next=frontend/index.html'); return }
     const user = session.user;
     document.documentElement.classList.remove('guard');
     supa.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') location.replace('../index.html') });

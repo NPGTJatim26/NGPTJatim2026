@@ -10,13 +10,12 @@
   // ---------- Akses: Trial / Akun (sama seperti halaman lain) ----------
   (async () => {
     const TRIAL = new URLSearchParams(location.search).get('mode') === 'trial', theme = $('#theme');
-    const home = () => location.href = '../index.html';
-    if (TRIAL) { theme.insertAdjacentHTML('beforebegin', '<span class="hsp" style="flex:1"></span><span class="trial" style="background:#f59e0b;color:#3b2300;font-weight:700;font-size:12px;padding:4px 10px;border-radius:999px">Mode Trial</span><button class="hb" id="thome">Beranda</button>'); $('#thome').onclick = home }
+    if (TRIAL) { theme.insertAdjacentHTML('beforebegin', '<span class="hsp" style="flex:1"></span><span class="trial" style="background:#f59e0b;color:#3b2300;font-weight:700;font-size:12px;padding:4px 10px;border-radius:999px">Mode Trial</span>') }
     else {
       const { data: { session } } = await supa.auth.getSession();
-      if (!session) return location.replace('../index.html');
-      theme.insertAdjacentHTML('beforebegin', `<span style="flex:1"></span><span style="font-size:12px;opacity:.85">${esc(session.user.email)}</span><button class="hb" id="thome">Beranda</button><button class="hb" id="logout">Keluar</button>`);
-      $('#thome').onclick = home; $('#logout').onclick = async () => { await supa.auth.signOut(); home() };
+      if (!session) return location.replace('../index.html?auth=1&next=ppt/index.html');
+      theme.insertAdjacentHTML('beforebegin', `<span style="flex:1"></span><span style="font-size:12px;opacity:.85">${esc(session.user.email)}</span><button class="hb" id="logout">Keluar</button>`);
+      $('#logout').onclick = async () => { await supa.auth.signOut(); location.replace('../index.html') };
     }
     document.documentElement.classList.remove('guard');
   })();
@@ -37,11 +36,20 @@
     ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over') }));
     drop.addEventListener('drop', e => e.dataTransfer.files[0] && pick(e.dataTransfer.files[0]));
     async function pick(f) { try { const b = await DZ.read(drop, f); cb(f, b); DZ.done(drop, f) } catch (err) { DZ.fail(drop); $('#status').textContent = 'Gagal membaca file: ' + err.message } ready() }
+    drop._loadFile = pick;
   }
+
   bind($('#dropD'), $('#fileD'), (f, b) => { if (!/\.zip$/i.test(f.name)) throw new Error('Data harus berupa .zip shapefile'); dataBuf = b; dataName = f.name });
 
   bind($('#dropH'), $('#fileH'), (f, b) => { if (!/\.zip$/i.test(f.name)) throw new Error('HAT harus berupa .zip shapefile'); hatBuf = b; hatName = f.name });
   bind($('#dropS'), $('#fileS'), (f, b) => { if (!/\.zip$/i.test(f.name)) throw new Error('TS harus berupa .zip shapefile titik survei'); tsBuf = b; tsName = f.name });
+  ['#dropD', '#dropS', '#dropH'].forEach(selector => {
+    const drop = $(selector);
+    DrivePicker.mount(drop, {
+      accept: file => /\.zip$/i.test(file.name),
+      onSelect: file => drop._loadFile(file)
+    });
+  });
 
   // ---------- Loading + generate ----------
   const STEPS = ['Membaca template', 'Membaca data shapefile (DJPA, HAT, TS)', 'Menghitung tabel & ringkasan', 'Memuat basemap, menggambar peta & menyusun slide'];

@@ -15,11 +15,11 @@ Tidak dibutuhkan project Google Cloud, client secret, service account, atau proj
 
 ## Alur pengguna
 
-Pengguna masuk seperti biasa ke aplikasi, lalu menekan **Hubungkan Google Drive** dan memilih akun Google serta menyetujui izin. Alamat email Google boleh berbeda dari email aplikasi. File baru disimpan di folder `Analisis Penggunaan Tanah` pada Drive pengguna. Unggahan menggunakan Drive resumable upload dalam potongan 8 MiB; daftar file, unduh, dan hapus juga dilakukan melalui Drive API.
+Pengguna masuk atau mendaftar dari halaman landing. Sesi aplikasi yang sama dipakai oleh semua alat, sehingga pengguna tidak perlu masuk ulang saat berpindah halaman. Untuk file Drive, tekan **Hubungkan Google Drive** atau **Ambil dari Drive** pada alat yang digunakan, lalu pilih akun Google dan setujui izin bila diminta. Alamat email Google boleh berbeda dari email aplikasi. File baru disimpan di folder `Analisis Penggunaan Tanah` pada Drive pengguna. Unggahan menggunakan Drive resumable upload dalam potongan 8 MiB; daftar file, unduh, dan hapus juga dilakukan melalui Drive API.
 
 Izin yang diminta adalah `drive.file` dan akses alamat email akun Google. Aplikasi tidak meminta akses menyeluruh ke semua isi Drive. Token akses hanya disimpan di memori halaman, bukan di local storage atau database; jika Google meminta otorisasi lagi, pengguna dapat menekan tombol hubungkan kembali.
 
-Pada halaman Tabel, ZIP sumber disimpan otomatis setelah berhasil dibaca. Tombol **Simpan Excel ke Google Drive** menyimpan hasil `.xlsx`; tombol unduh lokal tetap tersedia. File lama yang tersimpan di bucket Supabase tetap ditampilkan sebagai file lama dan tidak otomatis dipindahkan ke Drive.
+Layout Peta, Dashboard, Tabel, dan Generator PPT dapat mengambil ZIP dari Drive sesuai jenis inputnya; Penyusun Laporan dapat mengambil berkas `.xlsx`, `.xls`, `.md`, atau `.txt`. Dashboard dan Tabel juga menyediakan daftar file Drive untuk dibuka. Pada Tabel, ZIP sumber disimpan otomatis setelah berhasil dibaca. Tombol **Simpan Excel ke Google Drive** menyimpan hasil `.xlsx`; tombol unduh lokal tetap tersedia. File lama yang tersimpan di bucket Supabase tetap ditampilkan sebagai file lama dan tidak otomatis dipindahkan ke Drive.
 
 ## Batasan
 

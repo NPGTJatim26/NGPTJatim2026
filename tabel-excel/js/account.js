@@ -4,7 +4,7 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const TRIAL = new URLSearchParams(location.search).get('mode') === 'trial';
-  const HOME = '../index.html', LOGIN = '../frontend/login.html?next=' + encodeURIComponent('../tabel-excel/index.html');
+  const HOME = '../index.html', LOGIN = '../index.html?auth=1&next=tabel-excel/index.html';
 
   const css = document.createElement('style');
   css.textContent = `
@@ -41,7 +41,7 @@
   }
 
   const { data: { session } } = await supa.auth.getSession();
-  if (!session) { location.replace(HOME); return }
+  if (!session) { location.replace(HOME + '?auth=1&next=tabel-excel/index.html'); return }
   const user = session.user;
   document.documentElement.classList.remove('guard');
   supa.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') location.replace(HOME) });

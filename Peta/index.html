@@ -10,7 +10,9 @@
 <script>
 try { document.documentElement.dataset.theme = localStorage.theme || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light"); }
 catch (e) { document.documentElement.dataset.theme = "light"; }
+document.documentElement.classList.add("guard");
 </script>
+<style>html.guard body{visibility:hidden}</style>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -56,7 +58,7 @@ catch (e) { document.documentElement.dataset.theme = "light"; }
         <span class="drop-icon" aria-hidden="true">↑</span><strong>Garis Pantai</strong><span class="drop-hint">ZIP shapefile</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fPantai" accept=".zip" hidden>
       </div>
     </div>
-    <a class="drive-link" href="https://drive.google.com/drive/folders/1bbEIBm-rSeB74DI9rKi90NxK-IlNAJMK?usp=sharing" target="_blank" rel="noopener noreferrer">Buka folder data peta dasar di Google Drive <span aria-hidden="true">↗</span></a>
+    <a class="drive-link" href="https://drive.google.com/drive/folders/1bbEIBm-rSeB74DI9rKi90NxK-IlNAJMK?usp=sharing" target="_blank" rel="noopener noreferrer">Download data peta dasar di Google Drive <span aria-hidden="true">↗</span></a>
     <div id="manualSim" hidden>
       <div class="dropzone" role="button" tabindex="0" data-file-input="fSim">
         <span class="drop-icon" aria-hidden="true">↑</span><strong>Simbologi manual</strong><span class="drop-hint">Simbol_semua, RTR, Toponim (.stylx)</span><span class="drop-file" data-file-name>Seret atau pilih file</span><input type="file" id="fSim" accept=".stylx" multiple hidden>
@@ -71,7 +73,10 @@ catch (e) { document.documentElement.dataset.theme = "light"; }
       <label>Tahun <input id="tahun" value="2026"></label>
       <label>Jenis rencana tata ruang<select id="rencana"><option value="rdtr">Rencana Detail Tata Ruang (RDTR)</option><option value="rtrw">Rencana Tata Ruang Wilayah (RTRW)</option></select></label>
       <label>Skala inset (1:N)<input id="skInset" type="number" value="5000000" step="50000"></label>
+      <label>Pisahkan pulau jika berjarak &gt; (km; 0 = nonaktif)<input id="pulauKm" type="number" value="10" min="0" step="1"></label>
     </div>
+    <p id="pulauInfo" class="mu" aria-live="polite"></p>
+    <div id="pulauJudul" class="field-grid"></div>
     <label class="check-field"><input type="checkbox" id="batasLuar" checked> Tampilkan batas provinsi dan kab/kota di luar wilayah kerja</label>
     <label class="check-field"><input type="checkbox" id="labelKecamatan" checked> Tampilkan label kecamatan (WADMKC)</label>
     <label>Sumber data (satu baris per butir)<textarea id="sumber" rows="5">Sumber :
@@ -109,7 +114,53 @@ Peta ini bukan referensi resmi mengenai garis-garis batas administrasi nasional 
 <script src="logo.js"></script>
 <script src="font.js"></script>
 <script src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../frontend/supabase.js"></script>
+<script src="../frontend/drive-config.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+<script src="../frontend/drive.js"></script>
+<script src="../frontend/drive-picker.js"></script>
+<style>.top button.sec{width:auto;margin:0;padding:8px 12px}</style>
 <script>
+const petaInputs = ['fDjpa', 'fSrv', 'fDasar', 'fKab', 'fBati', 'fPantai'];
+petaInputs.forEach(id => {
+  const input = document.getElementById(id), zone = input.closest('.dropzone');
+  DrivePicker.mount(zone, {
+    accept: file => /\.zip$/i.test(file.name),
+    onSelect: file => {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+});
+(async () => {
+  if (new URLSearchParams(location.search).get('mode') === 'trial') {
+    document.documentElement.classList.remove('guard');
+    return;
+  }
+  const { data, error } = await supa.auth.getSession();
+  if (error) throw error;
+  if (!data.session) { location.replace('../index.html?auth=1&next=Peta/index.html'); return; }
+  const account = document.createElement('span');
+  account.className = 'mu';
+  account.textContent = data.session.user.email;
+  const logout = document.createElement('button');
+  logout.className = 'sec';
+  logout.textContent = 'Keluar';
+  logout.onclick = async () => {
+    const { error: signOutError } = await supa.auth.signOut();
+    if (signOutError) throw signOutError;
+    location.replace('../index.html');
+  };
+  document.querySelector('.top').insertBefore(account, document.getElementById('theme'));
+  document.querySelector('.top').insertBefore(logout, document.getElementById('theme'));
+  supa.auth.onAuthStateChange(event => {
+    if (event === 'SIGNED_OUT') location.replace('../index.html?auth=1');
+  });
+  document.documentElement.classList.remove('guard');
+})();
 document.getElementById("theme").onclick = () => {
   const root = document.documentElement;
   root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";

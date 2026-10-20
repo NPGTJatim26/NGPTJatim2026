@@ -1,5 +1,5 @@
 /* Layout Peta Otomatis. Geometri template mengikuti 00_Template_Judul_2_Baris.pagx (A3 lebar, 42 x 29,7 cm) */
-const $ = s => document.querySelector(s);
+const $ = s => document.querySelector(s) || { value: '', checked: false, style: {}, textContent: '' };
 const PG = { w: 42, h: 29.7 }, FR = { x: 2.31, y: 1.33, w: 27.5, h: 27 }, RX = 30.6, RW = 10.0;
 const TEMA = {
   adm: ['Administrasi', 'WADMKC'], kerja: ['Peta Kerja', null], lama: ['Penggunaan Tanah Lama', 'GNAME25'], baru: ['Penggunaan Tanah Baru', 'QNAME25'],
@@ -8,7 +8,7 @@ const TEMA = {
   pangan: ['Potensi Pertanian Pangan', null], sektor: ['Potensi Sektor Lain', null], karl: ['Potensi Cadangan Karbon (Lama)', null], kar: ['Potensi Cadangan Karbon', null]
 };
 const RENCANA = { rdtr: 'Rencana Detail Tata Ruang', rtrw: 'Rencana Tata Ruang Wilayah' };
-const titleOf = t => { if (t === 'karl') return TEMA.kar[0]; if (t !== 'rdtr' && t !== 'rtrw') return TEMA[t][0]; const term = RENCANA[$('#rencana').value] || RENCANA.rdtr; return t === 'rdtr' ? term : 'Kesesuaian Penggunaan Tanah terhadap ' + term };
+const titleOf = t => { if (t === 'karl') return TEMA.kar[0]; if (t !== 'rdtr' && t !== 'rtrw') return TEMA[t][0]; const term = ($('#rencanaTeks').value || '').trim() || RENCANA[$('#rencana').value] || RENCANA.rdtr; return t === 'rdtr' ? term : 'Kesesuaian Penggunaan Tanah terhadap ' + term };
 const BINS = [[5, '0 - 5 Ton'], [10, '5 - 10 Ton'], [25, '10 - 25 Ton'], [50, '25 - 50 Ton'], [100, '50 - 100 Ton'], [200, '100 - 200 Ton'], [Infinity, '> 200 Ton']];
 const BINCOL = Object.fromEntries(BINS.map((b, i) => [b[1], ['#e8e8ff', '#c9c9ff', '#a8a8ff', '#8585ff', '#5c5cff', '#2e2eff', '#0000b8'][i]]));
 const PANGAN = 'Pertanian Pangan';
@@ -49,9 +49,10 @@ async function loadBati(file) {
   const image = await (await GeoTIFF.fromArrayBuffer(await z.file(tn).async('arraybuffer'))).getImage(), W = image.getWidth(), H = image.getHeight(); let x0, y0, rx, ry;
   try { const o = image.getOrigin(), r = image.getResolution(); x0 = o[0]; y0 = o[1]; rx = Math.abs(r[0]); ry = Math.abs(r[1]) } catch (e) { }
   if (!isFinite(x0) || x0 === undefined) { const wn = names.find(n => /\.(tfw|tifw|wld)$/i.test(n)); if (!wn) throw new Error('Raster tidak punya georeferensi. Sertakan file .tfw di dalam ZIP.'); const t = (await z.file(wn).async('string')).trim().split(/\s+/).map(Number); rx = Math.abs(t[0]); ry = Math.abs(t[3]); x0 = t[4] - rx / 2; y0 = t[5] + ry / 2 }
-  let crs = null, tag = ''; const pn = names.find(n => ext(n) === 'prj');
-  if (pn) { crs = await z.file(pn).async('string'); tag = 'dari .prj' }
-  else { const gk = image.getGeoKeys ? image.getGeoKeys() : null, code = gk && (gk.ProjectedCSTypeGeoKey || gk.GeographicTypeGeoKey); if (code && code !== 32767) { crs = epsgToP4(code); tag = 'EPSG:' + code; if (!crs) throw new Error('EPSG ' + code + ' dari GeoTIFF belum didukung. Sertakan file .prj yang didukung.') } }
+  let crs = null, tag = ''; const epsg = +$('#bEpsg').value, pn = names.find(n => ext(n) === 'prj');
+  if (epsg) { crs = epsgToP4(epsg); tag = 'EPSG:' + epsg; if (!crs) throw new Error('EPSG ' + epsg + ' belum didukung. Gunakan UTM (326xx/327xx), 4326, atau sertakan .prj.') }
+  else if (pn) { crs = await z.file(pn).async('string'); tag = 'dari .prj' }
+  else { const gk = image.getGeoKeys ? image.getGeoKeys() : null, code = gk && (gk.ProjectedCSTypeGeoKey || gk.GeographicTypeGeoKey); if (code && code !== 32767) { crs = epsgToP4(code); tag = 'EPSG:' + code; if (!crs) throw new Error('EPSG ' + code + ' dari GeoTIFF belum didukung. Isi kolom EPSG atau sertakan .prj.') } }
   if (!crs) { crs = epsgToP4(32750); tag = 'tidak tertulis di file, diasumsikan UTM 50S (EPSG:32750)' }
   const geo = crs === 'GEO' || /^\s*GEOGCS/i.test(crs), fwd = geo ? { forward: p => p } : proj4('EPSG:4326', crs), nd = image.getGDALNoData ? image.getGDALNoData() : null;
   return { image, W, H, x0, y0, rx, ry, rxm: geo ? rx * 111320 : rx, rym: geo ? ry * 111320 : ry, fwd, nodata: nd == null ? 32767 : nd, info: `${W}x${H} px, resolusi ${(geo ? rx * 111320 : rx).toFixed(0)} m, CRS ${tag}` };
@@ -141,38 +142,8 @@ async function readZip(file) {
   if (c && (Math.abs(c[0]) > 180 || Math.abs(c[1]) > 90)) throw new Error('Koordinat bukan lon/lat: ZIP tidak punya .prj yang valid. Sertakan file .prj (UTM/WGS84 atau Cylindrical Equal Area).');
   return out;
 }
-const bind = (id, fn) => {
-  const input = $(id), zone = document.querySelector(`[data-file-input="${id.slice(1)}"]`);
-  const readFiles = async files => {
-    const selected = Array.from(files || []);
-    if (!input.multiple) selected.splice(1);
-    for (const f of selected) {
-      const name = zone && zone.querySelector('[data-file-name]');
-      if (name) name.textContent = f.name;
-      if (zone) zone.classList.add('has-file');
-      st('Membaca ' + f.name + '...');
-      try { const r = await fn(f); st(r || f.name + ' dimuat.') }
-      catch (x) { st('Gagal: ' + errMsg(x)) }
-    }
-  };
-  input.onchange = e => readFiles(e.target.files);
-  if (!zone) return;
-  zone.addEventListener('click', e => { if (!e.target.closest('input')) input.click() });
-  zone.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click() }
-  });
-  zone.addEventListener('dragenter', e => { e.preventDefault(); zone.classList.add('dragover') });
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover') });
-  zone.addEventListener('dragleave', e => {
-    if (!zone.contains(e.relatedTarget)) zone.classList.remove('dragover');
-  });
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('dragover');
-    readFiles(e.dataTransfer.files);
-  });
-};
-bind('#fDjpa', async f => { const l = await readZip(f); S.djpa = l[0].features });
+const bind = (id, fn) => $(id).onchange = async e => { const f = e.target.files[0]; if (!f) return; st('Membaca ' + f.name + '...'); try { const r = await fn(f); st(r || f.name + ' dimuat.') } catch (x) { st('Gagal: ' + errMsg(x)) } };
+bind('#fDjpa', async f => { const l = await readZip(f); S.djpa = l[0].features; S._isl = null; const n = buildIslandUI(); return 'DJPA dimuat: ' + S.djpa.length + ' fitur' + (n ? ', ' + n + ' inset pulau terdeteksi' : '') });
 bind('#fSrv', async f => { S.survey = (await readZip(f))[0].features });
 
 /* ---- util ---- */
@@ -187,6 +158,30 @@ function bounds(fs) { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; const w = x => {
 function areaDeg(r) { let s = 0; for (let i = 0; i < r.length - 1; i++) s += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(s / 2) }
 
 /* ---- render ---- */
+const bbOf = f => f._bb || (f._bb = bounds([f]));
+const hit = (b, w) => b[2] >= w[0] && b[0] <= w[2] && b[3] >= w[1] && b[1] <= w[3];
+const arOf = f => { if (f._ar === undefined) { const r0 = rings(f.geometry)[0]; f._ar = r0 ? areaDeg(r0) : 0 } return f._ar };
+const niceN = n => { const p = 10 ** (Math.floor(Math.log10(n)) - 1); return Math.ceil(n / p) * p };
+function detectIslands(fs, thrKm, maxN) {
+  const none = { main: fs, islands: [], total: 1 }; if (!(thrKm > 0) || fs.length < 2) return none;
+  const d = thrKm / 111, cell = new Map(), cells = [], par = [], first = new Array(fs.length);
+  const id = (gx, gy) => { const kk = gx + ',' + gy; let v = cell.get(kk); if (v === undefined) { v = par.length; par.push(v); cells.push([gx, gy]); cell.set(kk, v) } return v };
+  const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i] } return i }, uni = (a, b) => { a = find(a); b = find(b); if (a !== b) par[a] = b };
+  fs.forEach((f, i) => { const b = bbOf(f); let a = -1; for (let gx = Math.floor(b[0] / d); gx <= Math.floor(b[2] / d); gx++) for (let gy = Math.floor(b[1] / d); gy <= Math.floor(b[3] / d); gy++) { const v = id(gx, gy); if (a < 0) a = v; else uni(a, v) } first[i] = a });
+  cells.forEach(([gx, gy], v) => { for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { if (!dx && !dy) continue; const w = cell.get((gx + dx) + ',' + (gy + dy)); if (w !== undefined) uni(v, w) } });
+  const G = new Map();
+  fs.forEach((f, i) => { const r = find(first[i]), b = bbOf(f); let g = G.get(r); if (!g) G.set(r, g = { feats: [], ar: 0, bb: [1e9, 1e9, -1e9, -1e9] }); g.feats.push(f); g.ar += arOf(f); g.bb = [Math.min(g.bb[0], b[0]), Math.min(g.bb[1], b[1]), Math.max(g.bb[2], b[2]), Math.max(g.bb[3], b[3])] });
+  const all = [...G.values()].sort((a, b) => b.ar - a.ar); if (all.length < 2) return none;
+  return { main: all[0].feats, islands: all.slice(1, 1 + maxN), total: all.length };
+}
+function islandsFor(thrKm) { if (S._isl && S._isl.fs === S.djpa && S._isl.key === thrKm) return S._isl.r; const r = detectIslands(S.djpa, thrKm, 4); S._isl = { fs: S.djpa, key: thrKm, r }; return r }
+function buildIslandUI() {
+  const thr = +$('#pulauKm').value, isl = S.djpa ? islandsFor(Number.isFinite(thr) ? thr : 10) : { islands: [], total: 1 }, n = isl.islands.length, box = $('#pulauJudul');
+  const info = $('#pulauInfo'); info.textContent = !S.djpa ? '' : n ? `Terdeteksi ${n} inset pulau` + (isl.total - 1 > n ? ` (${isl.total - 1 - n} gugus terkecil tidak ditampilkan; naikkan jarak untuk menggabungkan)` : '') + '.' : 'Tidak ada pulau terpisah terdeteksi.';
+  if (!box.appendChild) return n; box.innerHTML = '';
+  isl.islands.forEach((g, i) => { const cnt = {}; g.feats.forEach(f => { const nm = prop(f.properties, 'WADMKC') || prop(f.properties, 'WADMKK') || ''; cnt[nm] = (cnt[nm] || 0) + 1 }); const nm = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Pulau ' + (i + 1), l = document.createElement('label'); l.innerHTML = 'Judul inset ' + (i + 1) + '<input data-i="' + i + '">'; l.querySelector('input').value = nm; box.appendChild(l) });
+  return n;
+}
 async function render(cv, dpi) {
   await FONT_OK; await Promise.all([LG, KP].map(i => i.decode ? i.decode().catch(() => { }) : 0));
   const u = dpi / 2.54, tema = $('#tema').value, pp = u * 2.54 / 72, TB = 1, TK = 1;
@@ -228,85 +223,104 @@ async function render(cv, dpi) {
     }
     return ops;
   };
-  const fs = S.djpa, [x0, y0, x1, y1] = bounds(fs), clon = (x0 + x1) / 2, clat = (y0 + y1) / 2, mx = 111320 * Math.cos(clat * Math.PI / 180), my = 111320;
-  const needM = Math.max((x1 - x0) * mx / (FR.w / 100), (y1 - y0) * my / (FR.h / 100)) * 1.06;
-  const N = Math.ceil(needM / 5000) * 5000, k = 100 / N, SC = 1;
+  const fs = S.djpa, thr = +$('#pulauKm').value, ISL = islandsFor(Number.isFinite(thr) ? thr : 10), mainFs = ISL.main;
+  const [x0, y0, x1, y1] = bounds(mainFs), clon = (x0 + x1) / 2, clat = (y0 + y1) / 2, mx = 111320 * Math.cos(clat * Math.PI / 180), my = 111320;
+  const needM = Math.max((x1 - x0) * mx / (FR.w / 100), (y1 - y0) * my / (FR.h / 100)) * (ISL.islands.length ? 1.18 : 1.06);
+  const N = +$('#skala').value || Math.ceil(needM / 5000) * 5000, k = 100 / N, SC = 1;
   const P = (lo, la) => [X(FR.x + FR.w / 2 + (lo - clon) * mx * k), Y(FR.y + FR.h / 2 - (la - clat) * my * k)];
   const kab = {}; fs.forEach(f => { const v = prop(f.properties, 'WADMKK'); if (v) kab[v] = (kab[v] || 0) + 1 });
-  const wil = Object.entries(kab).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-  /* bingkai peta, isi dipotong */
-  c.save(); c.beginPath(); c.rect(X(FR.x), Y(FR.y), X(FR.w), Y(FR.h)); c.clip();
-  if (tema === 'kerja') await tiles(c, P, u, k, clon, clat, mx, my);
-  const LAB = [];
+  const wil = $('#wil').value || Object.entries(kab).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
   const winLL = [clon - FR.w / 2 / k / mx, clat - FR.h / 2 / k / my, clon + FR.w / 2 / k / mx, clat + FR.h / 2 / k / my];
   const tgt = (S.kab || []).filter(f => String(prop(f.properties, 'WADMKK') || '').toLowerCase() === wil.toLowerCase());
-  if (tema !== 'kerja') { c.fillStyle = '#c6f3ff'; c.fillRect(X(FR.x), Y(FR.y), X(FR.w), Y(FR.h)); if (S.bati) await drawBati(c, P, winLL) }
-  if (S.kab) {
-    const kr = tema === 'kerja', fx0 = X(FR.x), fx1 = X(FR.x + FR.w), fy0 = Y(FR.y), fy1 = Y(FR.y + FR.h);
-    c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = Math.max(.5, .01 * u);
-    for (const f of S.kab) {
-      const nm = String(prop(f.properties, 'WADMKK') || ''), RP = []; let a0 = 1e9, b0 = 1e9, a1 = -1e9, b1 = -1e9; c.beginPath();
-      rings(f.geometry).forEach(r => {
-        let px = 1e9, py = 1e9; const pts = [];
-        r.forEach((q, i) => { const p = P(q[0], q[1]); if (i && Math.abs(p[0] - px) < 1 && Math.abs(p[1] - py) < 1) return; px = p[0]; py = p[1]; i ? c.lineTo(px, py) : c.moveTo(px, py); pts.push(p); a0 = Math.min(a0, px); a1 = Math.max(a1, px); b0 = Math.min(b0, py); b1 = Math.max(b1, py) });
-        c.closePath(); RP.push(pts);
-      });
-      if (!kr) { c.fill('evenodd'); c.stroke() }
-      if (nm && nm.toLowerCase() !== wil.toLowerCase() && a1 > fx0 && a0 < fx1 && b1 > fy0 && b0 < fy1) { c.font = fnt(.45, 1); const hw = c.measureText(nm).width / 2 + .2 * u, hh = .4 * u, lp = labelPt(RP, [Math.max(a0, fx0 + hw), Math.max(b0, fy0 + hh), Math.min(a1, fx1 - hw), Math.min(b1, fy1 - hh)], u); if (lp) LAB.push({ nm, p: lp.p, pr: lp.d }) }
-    }
+  /* ---- tata letak inset pulau terpencil ---- */
+  const FRAMES = [{ F: FR, P, k, mx, my, clon, clat, win: winLL, main: true }], INS = [], cs = .5, occ = new Set(), used = new Set(), gm = .35;
+  if (ISL.islands.length) {
+    mainFs.forEach(f => { const b = bbOf(f), p0 = P(b[0], b[3]), p1 = P(b[2], b[1]); for (let gx = Math.floor(p0[0] / u / cs); gx <= Math.floor(p1[0] / u / cs); gx++) for (let gy = Math.floor(p0[1] / u / cs); gy <= Math.floor(p1[1] / u / cs); gy++) occ.add(gx + ',' + gy) });
+    const cnt = (x, y, w, h) => { let n = 0; for (let gx = Math.floor(x / cs); gx <= Math.floor((x + w) / cs); gx++) for (let gy = Math.floor(y / cs); gy <= Math.floor((y + h) / cs); gy++) if (occ.has(gx + ',' + gy)) n++; return n };
+    ISL.islands.forEach((g, i) => {
+      const b = g.bb, px = (b[2] - b[0]) * .06 + .002, py = (b[3] - b[1]) * .06 + .002, ic = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], imx = 111320 * Math.cos(ic[1] * Math.PI / 180), Wm = (b[2] - b[0] + 2 * px) * imx, Hm = (b[3] - b[1] + 2 * py) * 111320;
+      const w = Math.min(9.5, Math.max(5.5, Math.sqrt(45 * Wm / Hm))), h = Math.min(7.5, Math.max(4, 45 / w)), Ni = niceN(Math.max(Wm * 100 / w, Hm * 100 / h) * 1.04);
+      const slots = [[FR.x + gm, FR.y + gm], [FR.x + gm, FR.y + FR.h - gm - h], [FR.x + FR.w - gm - w, FR.y + FR.h - gm - h], [FR.x + FR.w - gm - w, FR.y + gm]];
+      let best = -1, bs = 1e18; slots.forEach(([sx, sy], si) => { if (used.has(si)) return; const sc = cnt(sx, sy, w, h); if (sc < bs) { bs = sc; best = si } }); used.add(best);
+      const F = { x: slots[best][0], y: slots[best][1], w, h }, ki = 100 / Ni, el = document.querySelector('#pulauJudul input[data-i="' + i + '"]');
+      const Pi = (lo, la) => [X(F.x + F.w / 2 + (lo - ic[0]) * imx * ki), Y(F.y + F.h / 2 - (la - ic[1]) * 111320 * ki)];
+      const I = { F, P: Pi, k: ki, mx: imx, my: 111320, clon: ic[0], clat: ic[1], win: [ic[0] - F.w / 2 / ki / imx, ic[1] - F.h / 2 / ki / 111320, ic[0] + F.w / 2 / ki / imx, ic[1] + F.h / 2 / ki / 111320], main: false, N: Ni, title: el ? el.value : '' };
+      INS.push(I); FRAMES.push(I);
+    });
   }
-  const cls = new Map(), FK = [];
+  /* ---- kelas tema (sekali untuk semua bingkai) ---- */
+  const cls = new Map();
   if (tema !== 'kerja') {
-    for (const f of fs) { const kk = keyOf(tema, f.properties); FK.push(kk); if (kk == null || cls.has(kk)) continue; const sy = tema === 'adm' || /^kar|pangan|sektor/.test(tema) ? null : symFor(tema, kk); cls.set(kk, { sy, a: 0, col: sy ? sy.f : tema === 'ubah' ? (kk === 'Berubah' ? '#e53935' : '#fff') : /^kar/.test(tema) ? BINCOL[kk] : tema === 'pangan' ? '#C8F546' : tema === 'sektor' ? (SEKCOL[kk] || hash(kk)) : hash(kk) }) }
+    for (const f of fs) { const kk = keyOf(tema, f.properties); f._k = kk; if (kk == null) continue; if (!cls.has(kk)) { const sy = tema === 'adm' ||/^kar|pangan|sektor/.test(tema) ? null : symFor(tema, kk); cls.set(kk, { sy, a: 0, col: sy ? sy.f : tema === 'ubah' ? (kk === 'Berubah' ? '#e53935' : '#fff') : /^kar/.test(tema) ? BINCOL[kk] : tema === 'pangan' ? '#5fbf3a' : tema === 'sektor' ? (SEKCOL[kk] || hash(kk)) : hash(kk) }) } cls.get(kk).a += arOf(f) }
     for (const e of cls.values()) { const sy2 = e.sy || { L: [{ k: 'f', c: e.col }] }; e.ops = await paints(sy2, SC); e.lops = SC === 1 ? e.ops : await paints(sy2, 1) }
-    fs.forEach((f, i) => { const kk = FK[i]; if (kk == null) return; const e = cls.get(kk); c.beginPath(); const rr = rings(f.geometry); rr.forEach(r => { r.forEach((q, j) => { const p = P(q[0], q[1]); j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() }); runOps(e.ops); if (rr[0]) e.a += areaDeg(rr[0]) });
   }
-  const base = new Map(), pts = [], pc = new Set();
-  if (tema === 'kerja') {
-    if (tgt.length) { c.save(); c.beginPath(); c.rect(X(FR.x), Y(FR.y), X(FR.w), Y(FR.h)); tgt.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })); c.fillStyle = 'rgba(255,255,255,.5)'; c.fill('evenodd'); c.restore() }
-    const tg = (S.kab || []).filter(f => String(prop(f.properties, 'WADMKK') || '').toLowerCase() === wil.toLowerCase());
-    c.strokeStyle = '#ffeb3b'; c.lineWidth = .06 * u * TK; c.beginPath(); tg.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })); c.stroke();
-    base.set('Batas Lokasi Kerja', { L: [{ k: 's', c: '#ffeb3b', w: 3 }] });
-    const sv = S.survey || [], sf = ['KETERANGAN', 'KATEGORI', 'JENIS', 'KLASIFIKASI', 'REMARK', 'NAMOBJ'].find(z => sv.length && prop(sv[0].properties, z) !== undefined);
-    sv.forEach(f => { const g = f.geometry, q = g.type === 'MultiPoint' ? g.coordinates[0] : g.coordinates; if (!q) return; const cat = String((sf && prop(f.properties, sf)) || 'Titik Survei'), sy = S.ptsym.get(norm(cat)) || S.ptsym.get(norm('Titik Survei')), nm = sy ? cat : 'Titik Survei', p = P(q[0], q[1]); let e = cls.get(nm); if (!e) { e = { a: 0, pt: 1, psy: sy, pin: !sy, ops: [] }; cls.set(nm, e) } e.a++; if (sy) dot(p, sy, SC); else drawPin(c, p[0], p[1], .6 * u) });
-  }
+  /* ---- peta dasar: visibilitas legenda dari gabungan semua bingkai ---- */
+  const base = new Map(), pts = [], pc = new Set(); if (tema === 'kerja') base.set('Batas Lokasi Kerja', { L: [{ k: 's', c: '#ffeb3b', w: 3 }] });
   const pip = (x, y, rr) => { let ins = false; for (const r of rr) for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins } return ins };
   const trg = tgt.flatMap(f => rings(f.geometry)), tb = tgt.length ? bounds(tgt) : null;
   const inArea = q => !tb || (q[0] >= tb[0] && q[0] <= tb[2] && q[1] >= tb[1] && q[1] <= tb[3] && pip(q[0], q[1], trg));
-  const inWin = q => q[0] >= winLL[0] && q[0] <= winLL[2] && q[1] >= winLL[1] && q[1] <= winLL[3];
-  const clipPath = () => { c.beginPath(); tgt.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })) };
+  const wins = FRAMES.map(z => z.win), inWin = q => wins.some(w => q[0] >= w[0] && q[0] <= w[2] && q[1] >= w[1] && q[1] <= w[3]);
   const free = $('#batasLuar').checked ? /pantai|^batas (provinsi|kab)/i : /pantai/i, vis = new Map(), syOf = new Map(), items = [];
-  const test = (g, fr) => { const cs = lines(g).flat(); const stp = 1; for (let i = 0; i < cs.length; i += stp) if (fr ? inWin(cs[i]) : inArea(cs[i])) return true; return false };
+  const test = (g, fr) => { const cs2 = lines(g).flat(); for (let i = 0; i < cs2.length; i++) if (fr ? inWin(cs2[i]) : inArea(cs2[i])) return true; return false };
   for (const L of S.dasar) for (const f of L.features) {
     if (/Point/.test(f.geometry.type)) { pts.push(f); continue }
     const nm = String(prop(f.properties, 'KETERANGAN') ?? L.name), fr = free.test(nm); if (S.coast && /pantai/i.test(nm)) continue; if (!syOf.has(nm)) syOf.set(nm, find(S.top, nm) || { L: [{ k: 's', c: '#555', w: 1 }] });
     if (!vis.get(nm) && test(f.geometry, fr)) vis.set(nm, 1); items.push([f, nm, fr]);
   }
   if (S.coast) { syOf.set('Garis Pantai', find(S.top, 'Garis Pantai') || { L: [{ k: 's', c: '#00bcd4', w: 1 }] }); for (const f of S.coast) { if (!f.geometry) continue; if (!vis.get('Garis Pantai') && test(f.geometry, true)) vis.set('Garis Pantai', 1); items.push([f, 'Garis Pantai', true]) } }
-  const strokeF = ([f, nm]) => { const sy = syOf.get(nm); c.beginPath(); lines(f.geometry).forEach(l => l.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) })); sy.L.forEach(l => { setStroke(l, TB * SC * bw(nm)); c.stroke() }); c.setLineDash([]); c.lineCap = 'butt' };
-  items.filter(z => z[2]).forEach(strokeF);
-  c.save(); if (tgt.length) { clipPath(); c.clip('evenodd') } items.filter(z => !z[2]).forEach(strokeF); c.restore();
   syOf.forEach((sy, nm) => { if (vis.get(nm)) base.set(nm, sy) });
   const ptXY = f => f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates, ptsIn = pts.filter(f => inArea(ptXY(f)));
   ptsIn.forEach(f => { const rm = prop(f.properties, 'REMARK'); if (rm) pc.add(String(rm)) });
-  ptsIn.forEach(f => { const q = ptXY(f), p = P(q[0], q[1]), sy = S.ptsym.get(norm(prop(f.properties, 'REMARK'))); if (sy) dot(p, sy, SC); else { c.fillStyle = '#000'; c.beginPath(); c.arc(p[0], p[1], .09 * u, 0, 7); c.fill() } });
-  if ($('#labelKecamatan').checked) {
-    const kec = new Map();
-    for (const f of fs) {
-      const nm = String(prop(f.properties, 'WADMKC') || '').trim(), kabupaten = String(prop(f.properties, 'WADMKK') || '').trim();
-      if (!nm || (kabupaten && kabupaten.toLowerCase() !== wil.toLowerCase())) continue;
-      const b = bounds([f]), box = kec.get(nm) || [Infinity, Infinity, -Infinity, -Infinity];
-      box[0] = Math.min(box[0], b[0]); box[1] = Math.min(box[1], b[1]); box[2] = Math.max(box[2], b[2]); box[3] = Math.max(box[3], b[3]);
-      kec.set(nm, box);
+  /* ---- gambar isi satu bingkai ---- */
+  const drawFrame = async FM => {
+    const { F, P, k, mx, my, clon, clat, win, main } = FM, fx0 = X(F.x), fx1 = X(F.x + F.w), fy0 = Y(F.y), fy1 = Y(F.y + F.h), LAB = [];
+    c.save(); c.beginPath(); c.rect(fx0, fy0, fx1 - fx0, fy1 - fy0); c.clip();
+    if (tema === 'kerja') await tiles(c, P, u, k, clon, clat, mx, my, F.w, F.h);
+    else { c.fillStyle = '#c6f3ff'; c.fillRect(fx0, fy0, fx1 - fx0, fy1 - fy0); if (S.bati) await drawBati(c, P, win) }
+    if (S.kab) {
+      c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = Math.max(.5, .01 * u);
+      for (const f of S.kab) {
+        if (!hit(bbOf(f), win)) continue;
+        const nm = String(prop(f.properties, 'WADMKK') || ''), RP = []; let a0 = 1e9, b0 = 1e9, a1 = -1e9, b1 = -1e9; c.beginPath();
+        rings(f.geometry).forEach(r => {
+          let px = 1e9, py = 1e9; const pts2 = [];
+          r.forEach((q, i) => { const p = P(q[0], q[1]); if (i && Math.abs(p[0] - px) < 1 && Math.abs(p[1] - py) < 1) return; px = p[0]; py = p[1]; i ? c.lineTo(px, py) : c.moveTo(px, py); pts2.push(p); a0 = Math.min(a0, px); a1 = Math.max(a1, px); b0 = Math.min(b0, py); b1 = Math.max(b1, py) });
+          c.closePath(); RP.push(pts2);
+        });
+        if (tema !== 'kerja') { c.fill('evenodd'); c.stroke() }
+        if (main && nm && nm.toLowerCase() !== wil.toLowerCase() && a1 > fx0 && a0 < fx1 && b1 > fy0 && b0 < fy1) { c.font = fnt(.45, 1); const hw = c.measureText(nm).width / 2 + .2 * u, hh = .4 * u, lp = labelPt(RP, [Math.max(a0, fx0 + hw), Math.max(b0, fy0 + hh), Math.min(a1, fx1 - hw), Math.min(b1, fy1 - hh)], u); if (lp) LAB.push({ nm, p: lp.p, pr: lp.d }) }
+      }
     }
-    kec.forEach((b, nm) => {
-      const p = P((b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
-      if (p[0] >= X(FR.x) && p[0] <= X(FR.x + FR.w) && p[1] >= Y(FR.y) && p[1] <= Y(FR.y + FR.h)) LAB.push({ nm, p, pr: 0, fz: .3, color: '#263238' });
-    });
+    if (tema !== 'kerja') for (const f of fs) { if (f._k == null || !hit(bbOf(f), win)) continue; const e = cls.get(f._k); c.beginPath(); rings(f.geometry).forEach(r => { r.forEach((q, j) => { const p = P(q[0], q[1]); j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() }); runOps(e.ops) }
+    const clipPath = () => { c.beginPath(); tgt.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })) };
+    if (tema === 'kerja') {
+      if (tgt.length) { c.save(); c.beginPath(); c.rect(fx0, fy0, fx1 - fx0, fy1 - fy0); tgt.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })); c.fillStyle = 'rgba(255,255,255,.5)'; c.fill('evenodd'); c.restore() }
+      c.strokeStyle = '#ffeb3b'; c.lineWidth = .06 * u * TK; c.beginPath(); tgt.forEach(f => rings(f.geometry).forEach(r => { r.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) }); c.closePath() })); c.stroke();
+      const sv = S.survey || [], sf = ['KETERANGAN', 'KATEGORI', 'JENIS', 'KLASIFIKASI', 'REMARK', 'NAMOBJ'].find(z => sv.length && prop(sv[0].properties, z) !== undefined);
+      sv.forEach(f => { const g = f.geometry, q = g.type === 'MultiPoint' ? g.coordinates[0] : g.coordinates; if (!q || q[0] < win[0] || q[0] > win[2] || q[1] < win[1] || q[1] > win[3]) return; const cat = String((sf && prop(f.properties, sf)) || 'Titik Survei'), sy = S.ptsym.get(norm(cat)) || S.ptsym.get(norm('Titik Survei')), nm = sy ? cat : 'Titik Survei', p = P(q[0], q[1]); let e = cls.get(nm); if (!e) { e = { a: 0, pt: 1, psy: sy, pin: !sy, ops: [] }; cls.set(nm, e) } e.a++; if (sy) dot(p, sy, SC); else drawPin(c, p[0], p[1], .6 * u) });
+    }
+    const strokeF = ([f, nm]) => { const sy = syOf.get(nm); c.beginPath(); lines(f.geometry).forEach(l => l.forEach((q, i) => { const p = P(q[0], q[1]); i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]) })); sy.L.forEach(l => { setStroke(l, TB * SC * bw(nm)); c.stroke() }); c.setLineDash([]); c.lineCap = 'butt' };
+    const itv = items.filter(z => hit(bbOf(z[0]), win));
+    itv.filter(z => z[2]).forEach(strokeF);
+    c.save(); if (tgt.length) { clipPath(); c.clip('evenodd') } itv.filter(z => !z[2]).forEach(strokeF); c.restore();
+    ptsIn.forEach(f => { const q = ptXY(f); if (q[0] < win[0] || q[0] > win[2] || q[1] < win[1] || q[1] > win[3]) return; const p = P(q[0], q[1]), sy = S.ptsym.get(norm(prop(f.properties, 'REMARK'))); if (sy) dot(p, sy, SC); else { c.fillStyle = '#000'; c.beginPath(); c.arc(p[0], p[1], .09 * u, 0, 7); c.fill() } });
+    if ($('#labelKecamatan').checked) {
+      const G = new Map();
+      for (const f of fs) { const b = bbOf(f); if (!hit(b, win)) continue; const nm = String(prop(f.properties, 'WADMKC') || ''); if (!nm) continue; const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, w = arOf(f) || 1e-12; let g = G.get(nm); if (!g) G.set(nm, g = { sx: 0, sy: 0, s: 0, L: [] }); g.sx += cx * w; g.sy += cy * w; g.s += w; g.L.push([cx, cy]) }
+      G.forEach((g, nm) => { const gx = g.sx / g.s, gy = g.sy / g.s; let best = null, bd = 1e18; for (const [cx, cy] of g.L) { const d = (cx - gx) ** 2 + (cy - gy) ** 2; if (d < bd) { bd = d; best = [cx, cy] } } const p = P(best[0], best[1]); if (p[0] > fx0 && p[0] < fx1 && p[1] > fy0 && p[1] < fy1) LAB.push({ nm, p, pr: 1e5, kec: 1 }) });
+    }
+    if (main) LAB.push({ nm: wil, p: P(clon, clat), pr: Infinity });
+    const placed = main ? INS.map(I => [X(I.F.x), Y(I.F.y), X(I.F.x + I.F.w), Y(I.F.y + I.F.h)]) : [];
+    LAB.sort((a, b) => (b.pr || 0) - (a.pr || 0)).forEach(l => { c.font = fnt(l.kec ? .3 : .45, 1); const w = c.measureText(l.nm).width + .2 * u, h = (l.kec ? .36 : .5) * u, bx = [l.p[0] - w / 2, l.p[1] - h / 2, l.p[0] + w / 2, l.p[1] + h / 2]; if (placed.some(r => bx[0] < r[2] && bx[2] > r[0] && bx[1] < r[3] && bx[3] > r[1])) return; placed.push(bx); c.textAlign = 'center'; c.strokeStyle = '#fff'; c.lineWidth = (l.kec ? .08 : .1) * u; c.strokeText(l.nm, l.p[0], l.p[1]); c.fillStyle = l.kec ? '#111' : '#00b89c'; c.fillText(l.nm, l.p[0], l.p[1]) });
+    c.restore();
+  };
+  await drawFrame(FRAMES[0]);
+  for (const I of INS) {
+    await drawFrame(I);
+    c.strokeStyle = '#000'; c.lineWidth = .05 * u; c.strokeRect(X(I.F.x), Y(I.F.y), X(I.F.w), Y(I.F.h));
+    if (I.title) txt(I.title, I.F.x + .25, I.F.y + .4, .32, { b: 1, halo: 1 });
+    txt('SKALA 1:' + I.N.toLocaleString('id-ID'), I.F.x + .25, I.F.y + I.F.h - .3, .26, { halo: 1 });
   }
-  LAB.push({ nm: wil, p: P(clon, clat), pr: Infinity });
-  const placed = []; LAB.sort((a, b) => (b.pr || 0) - (a.pr || 0)).forEach(l => { const fz = l.fz || .45; c.font = fnt(fz, 1); const w = c.measureText(l.nm).width + .2 * u, h = (l.fz ? .38 : .5) * u, bx = [l.p[0] - w / 2, l.p[1] - h / 2, l.p[0] + w / 2, l.p[1] + h / 2]; if (placed.some(r => bx[0] < r[2] && bx[2] > r[0] && bx[1] < r[3] && bx[3] > r[1])) return; placed.push(bx); c.textAlign = 'center'; c.strokeStyle = '#fff'; c.lineWidth = (l.fz ? .07 : .1) * u; c.strokeText(l.nm, l.p[0], l.p[1]); c.fillStyle = l.color || '#00b89c'; c.fillText(l.nm, l.p[0], l.p[1]) });
-  c.restore();
   /* bingkai dan grid koordinat */
   c.strokeStyle = '#000'; c.lineWidth = .05 * u; c.strokeRect(X(FR.x), Y(FR.y), X(FR.w), Y(FR.h)); c.lineWidth = .1 * u; c.strokeRect(X(1.2), Y(.6), X(39.6), Y(28.5));
   [.2, .5, .8].forEach(t => {
@@ -330,7 +344,7 @@ async function render(cv, dpi) {
   txt(+(4 * step).toFixed(2) + ' Km', bx + 4 * step * kmCm, ny + 2.35, .24, { a: 'center' });
   txt('PETUNJUK LETAK PROVINSI', cx, ny + 3.1, .28, { a: 'center', b: 1 });
   const IB = { x: cx - 3.8, y: ny + 3.4, w: 7.6, h: 3.4 }; c.fillStyle = '#d6ecf7'; c.fillRect(X(IB.x), Y(IB.y), X(IB.w), Y(IB.h));
-  const SI = +$('#skInset').value || 5000000;
+  const SI = +$('#skInset').value || 700000;
   if (S.kab) {
     const [a0, b0, a1, b1] = bounds(tgt.length ? tgt : fs), clo = (a0 + a1) / 2, cla = (b0 + b1) / 2, k2 = 100 / SI, mx2 = 111320 * Math.cos(cla * Math.PI / 180), kx = mx2 * k2, ky = 111320 * k2;
     const Q = (lo, la) => [X(IB.x + IB.w / 2 + (lo - clo) * kx), Y(IB.y + IB.h / 2 - (la - cla) * ky)];
@@ -349,6 +363,10 @@ async function render(cv, dpi) {
     LB.forEach(l => { if (!l.nm) return; const vx0 = Math.max(l.bx0, ix0), vx1 = Math.min(l.bx1, ix1), vy0 = Math.max(l.by0, iy0), vy1 = Math.min(l.by1, iy1); if (vx1 - vx0 < .9 * u || vy1 - vy0 < .3 * u) return; c.font = fnt(.2, l.on); c.textAlign = 'center'; c.lineWidth = .06 * u; c.strokeStyle = '#fff'; c.strokeText(l.nm, (vx0 + vx1) / 2, (vy0 + vy1) / 2); c.fillStyle = '#111'; c.fillText(l.nm, (vx0 + vx1) / 2, (vy0 + vy1) / 2) });
     const ra = Q(winLL[0], winLL[3]), rb = Q(winLL[2], winLL[1]), rcx = (ra[0] + rb[0]) / 2, rcy = (ra[1] + rb[1]) / 2, hw = Math.max(Math.abs(rb[0] - ra[0]) / 2, .15 * u), hh = Math.max(Math.abs(rb[1] - ra[1]) / 2, .15 * u);
     c.strokeStyle = '#e00000'; c.lineWidth = .05 * u; c.strokeRect(rcx - hw, rcy - hh, hw * 2, hh * 2);
+    INS.forEach(I => {
+      const a = Q(I.win[0], I.win[3]), b = Q(I.win[2], I.win[1]);
+      c.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    });
     c.restore();
   }
   c.strokeStyle = '#000'; c.lineWidth = .03 * u; c.strokeRect(X(IB.x), Y(IB.y), X(IB.w), Y(IB.h)); txt('SKALA 1:' + SI.toLocaleString('id-ID'), cx, IB.y + IB.h + .3, .24, { a: 'center' });
@@ -417,9 +435,23 @@ async function loadDefaults() {
     const el = $('#st'); if (el.style) el.style.color = '#c62828'; const m = $('#manualSim'); if (m) m.hidden = false;
   }
 }
-bind('#fSim', async f => { S.sets = S.sets.filter(z => z.n !== f.name); S.sets.push({ n: f.name, m: await readStylx(f, 'poly') }); if (/topon/i.test(f.name)) { S.top = await readStylx(f, 'line'); S.ptsym = await readStylx(f, 'point') } st('Simbol dimuat manual (' + S.sets.reduce((a, z) => a + z.m.size, 0) + ').'); const el = $('#st'); if (el.style) el.style.color = '' });
+$('#fSim').onchange = async e => { try { for (const f of e.target.files) { st('Membaca ' + f.name + '...'); S.sets = S.sets.filter(z => z.n !== f.name); S.sets.push({ n: f.name, m: await readStylx(f, 'poly') }); if (/topon/i.test(f.name)) { S.top = await readStylx(f, 'line'); S.ptsym = await readStylx(f, 'point') } } st('Simbol dimuat manual (' + S.sets.reduce((a, z) => a + z.m.size, 0) + ').'); const el = $('#st'); if (el.style) el.style.color = '' } catch (x) { st('Gagal: ' + errMsg(x)) } };
 bind('#fDasar', async f => { await LOADING; S.dasar = await readZip(f) });
 bind('#fKab', async f => { S.kab = (await readZip(f)).flatMap(l => l.features); const c = {}; S.kab.forEach(x => { const p = prop(x.properties, 'WADMPR') || '(tanpa provinsi)'; c[p] = (c[p] || 0) + 1 }); return 'Batas kab/kota: ' + S.kab.length + ' fitur (' + Object.entries(c).map(([k, v]) => k + ' ' + v).join(', ') + ')' });
 bind('#fBati', async f => { S.bati = await loadBati(f); return 'Batimetri dimuat: ' + S.bati.info });
 bind('#fPantai', async f => { S.coast = (await readZip(f)).flatMap(l => l.features); return 'Garis pantai: ' + S.coast.length + ' fitur' });
 const LOADING = loadDefaults();
+
+if (typeof document.querySelectorAll === 'function') {
+  document.querySelectorAll('.dropzone').forEach(z => {
+    const inp = document.getElementById(z.dataset.fileInput), nameEl = z.querySelector('[data-file-name]'); if (!inp) return;
+    const show = () => { const n = inp.files && inp.files.length ? [...inp.files].map(f => f.name).join(', ') : ''; nameEl.textContent = n || 'Seret atau pilih file'; z.classList.toggle('has-file', !!n) };
+    z.addEventListener('click', e => { if (e.target !== inp) inp.click() });
+    z.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inp.click() } });
+    ['dragenter', 'dragover'].forEach(t => z.addEventListener(t, e => { e.preventDefault(); z.classList.add('dragover') }));
+    ['dragleave', 'drop'].forEach(t => z.addEventListener(t, e => { e.preventDefault(); z.classList.remove('dragover') }));
+    z.addEventListener('drop', e => { const fl = e.dataTransfer && e.dataTransfer.files; if (!fl || !fl.length) return; const dt = new DataTransfer(); [...fl].forEach(f => dt.items.add(f)); inp.files = dt.files; inp.dispatchEvent(new Event('change')); show() });
+    inp.addEventListener('change', show);
+  });
+  const pk = document.getElementById('pulauKm'); if (pk) pk.addEventListener('change', buildIslandUI);
+}

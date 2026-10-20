@@ -16,7 +16,8 @@ Mengganti simbologi cukup mengganti file `.stylx` di folder yang sama.
 - Ukuran simbol mengikuti style (.stylx) pada skala peta yang dibuat; tidak ada pengaturan skala referensi.
 - ZIP shapefile dengan proyeksi Cylindrical Equal Area ikut terbaca; .prj tidak dikenal atau tidak ada akan menampilkan pesan galat yang jelas.
 - Aturan Potensi Sektor Lain / Pangan mengikuti dashboard (kata kunci `SEK` di `app.js`).
-- Label kecamatan pada layout diambil dari atribut `WADMKC` di Peta DJPA; label dapat dinyalakan atau dimatikan melalui pengaturan.
-- Tema Administrasi tidak menggunakan simbol dari berkas `.stylx`; setiap kelas `WADMKC` diberi warna isian tersendiri agar nama kecamatan tidak cocok sebagian dengan simbol RTR/Simbol semua.
 - Batimetri: raster dibaca di browser (geotiff.js + proj4), hanya jendela yang dipakai peta utama dan inset. Nilai <= 0 dianggap kedalaman laut, nilai > 0 / tanpa data dianggap daratan (transparan). CRS dibaca dari GeoTIFF atau .prj; bila tidak ada, dipakai UTM 50S, atau isi kolom EPSG. Tidak dipakai di peta utama Peta Kerja (memakai citra), tetapi dipakai di inset semua tema.
 - Ekspor: PNG 300 dpi atau PDF A3 (420 x 297 mm) satu halaman. PDF berisi gambar peta resolusi 300 dpi (raster), bukan vektor, sehingga teks tidak bisa diseleksi. Memakai jsPDF 4.2.1 dari CDN.
+- Inset pulau terpencil: poligon DJPA dikelompokkan menurut kedekatan; kelompok terluas menjadi peta utama dan maksimal 4 kelompok lain menjadi kotak inset di dalam bingkai (di sudut yang paling sedikit menimpa daratan), masing-masing dengan skala sendiri. Inset petunjuk letak provinsi menampilkan kotak merah untuk cakupan peta utama dan setiap inset pulau. Jarak pemisah diatur di kolom "Pisahkan pulau jika berjarak > (km)" (0 = nonaktif); judul inset bisa diedit. Gugus yang lebih kecil dari 4 terbesar tidak ditampilkan kecuali berada di dalam jendela salah satu bingkai.
+- Label kecamatan (WADMKC) mengikuti kotak centang di panel pengaturan.
+- Tampilan mengikuti index.html dan style.css portal (kotak unggah seret-lepas, tema terang/gelap).

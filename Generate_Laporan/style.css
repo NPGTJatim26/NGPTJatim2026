@@ -7,6 +7,8 @@ body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,rg
 .brand-logo{display:block;width:44px;height:44px;object-fit:contain}
 .brand-title{display:grid;gap:1px}.brand-title strong{font-size:14px}.brand-title span,.eyebrow{color:var(--mu);font-size:11px;font-weight:700;letter-spacing:.08em}
 .sp{flex:1}.home-link{color:var(--mu);text-decoration:none;font-size:13px}.home-link:hover{color:var(--ac)}
+.top button.home-link{margin:0;padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.top button.home-link:hover{background:var(--hov)}
 .th{width:36px;height:36px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);display:grid;place-items:center;cursor:pointer}
 .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .th .sun{display:none}[data-theme=dark] .th .sun{display:block}[data-theme=dark] .th .moon{display:none}
