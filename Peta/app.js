@@ -88,6 +88,39 @@ $('#tema').innerHTML = Object.entries(TEMA).map(([k, v]) => `<option value="${k}
 const S = { kab: null, djpa: null, dasar: [], sets: [], ptsym: new Map(), survey: null, top: new Map() };
 const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const st = t => $('#st').textContent = t;
+function wilayahName() {
+  const selected = ($('#wil').value || '').trim();
+  if (selected) return selected;
+  const counts = new Map();
+  for (const f of S.djpa || []) {
+    const name = String(prop(f.properties, 'WADMKK') || '').trim();
+    if (name) counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+function downloadBaseName(tema) {
+  const region = wilayahName();
+  if (!region) throw new Error('Nama Kabupaten/Kota tidak tersedia pada data DJPA.');
+  const plan = $('#rencana').value === 'rtrw' ? 'RTRW' : 'RDTR';
+  const labels = {
+    adm: 'Peta Administrasi',
+    gupt: 'Peta Gambaran Umum Penguasaan Tanah',
+    lama: 'Peta Penggunaan Tanah Lama',
+    baru: 'Peta Penggunaan Tanah Baru',
+    ubah: 'Peta Perubahan Penggunaan Tanah',
+    rdtr: `Peta ${plan}`,
+    rtrw: `Peta Kesesuaian Penggunaan Tanah terhadap ${plan}`,
+    ket: 'Peta Ketersediaan Tanah',
+    pangan: 'Peta Potensi Pertanian Pangan',
+    sektor: 'Peta Potensi Sektor Lain',
+    karl: 'Peta Potensi Cadangan Karbon Lama',
+    kar: 'Peta Potensi Cadangan Karbon Baru',
+    hutan: 'Peta Kawasan Hutan',
+    kerja: 'Peta Kerja'
+  };
+  if (!labels[tema]) throw new Error('Tema peta tidak dikenal: ' + tema);
+  return `${labels[tema]}_${region}`.replace(/[<>:"\/\\|?*\u0000-\u001f]/g, '-').replace(/[. ]+$/, '');
+}
 
 /* ---- warna CIM (dari dashboard) ---- */
 const h2 = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
@@ -251,7 +284,7 @@ async function render(cv, dpi) {
   /* ---- kelas tema (sekali untuk semua bingkai) ---- */
   const cls = new Map();
   if (tema !== 'kerja') {
-    for (const f of fs) { const kk = keyOf(tema, f.properties); f._k = kk; if (kk == null) continue; if (!cls.has(kk)) { const sy = tema === 'adm' ||/^kar|pangan|sektor/.test(tema) ? null : symFor(tema, kk); cls.set(kk, { sy, a: 0, col: sy ? sy.f : tema === 'ubah' ? (kk === 'Berubah' ? '#e53935' : '#fff') : /^kar/.test(tema) ? BINCOL[kk] : tema === 'pangan' ? '#5fbf3a' : tema === 'sektor' ? (SEKCOL[kk] || hash(kk)) : hash(kk) }) } cls.get(kk).a += arOf(f) }
+    for (const f of fs) { const kk = keyOf(tema, f.properties); f._k = kk; if (kk == null) continue; if (!cls.has(kk)) { const sy = tema === 'adm' ||/^kar|pangan|sektor/.test(tema) ? null : symFor(tema, kk); cls.set(kk, { sy, a: 0, col: sy ? sy.f : tema === 'ubah' ? (kk === 'Berubah' ? '#e53935' : '#fff') : /^kar/.test(tema) ? BINCOL[kk] : tema === 'pangan' ? '#C8F546' : tema === 'sektor' ? (SEKCOL[kk] || hash(kk)) : hash(kk) }) } cls.get(kk).a += arOf(f) }
     for (const e of cls.values()) { const sy2 = e.sy || { L: [{ k: 'f', c: e.col }] }; e.ops = await paints(sy2, SC); e.lops = SC === 1 ? e.ops : await paints(sy2, 1) }
   }
   /* ---- peta dasar: visibilitas legenda dari gabungan semua bingkai ---- */
@@ -382,7 +415,7 @@ async function render(cv, dpi) {
   pl.forEach((n, i) => { const yy = y + i * pB, sy = S.ptsym.get(norm(n)); if (sy) dot([X(RX + 5.6), Y(yy)], sy, .7); else { c.fillStyle = '#000'; c.beginPath(); c.arc(X(RX + 5.6), Y(yy), .1 * u, 0, 7); c.fill() } c.textAlign = 'left'; txt(fit(n, 3.6, .26), RX + 6.2, yy, .26) });
   y += rowsB * pB + .35;
   const arr = [...cls]; /^kar/.test(tema) ? arr.sort((a, b) => BINS.findIndex(z => z[1] === a[0]) - BINS.findIndex(z => z[1] === b[0])) : arr.sort((a, b) => b[1].a - a[1].a);
-  const names = arr.map(z => z[0]), availH = yMax - y;
+  const names = arr.map(([name]) => tema === 'sektor' ? `Tersedia untuk ${name}` : name), availH = yMax - y;
   const wrap2 = (t, tw, fz) => {
     c.font = fnt(fz); const W = q => c.measureText(q).width / u; if (W(t) <= tw) return [t];
     const ws = t.split(' '); let l1 = '', k = 0; while (k < ws.length && W(l1 ? l1 + ' ' + ws[k] : ws[k]) <= tw) { l1 = l1 ? l1 + ' ' + ws[k] : ws[k]; k++ }
@@ -412,14 +445,22 @@ async function render(cv, dpi) {
   return { N, kelas: cls.size };
 }
 $('#go').onclick = async () => { await LOADING; if (!S.djpa) return st('Muat Peta DJPA (.zip) dulu.'); st('Membuat layout...'); try { const r = await render($('#cv'), 80); st(`Selesai. Skala 1:${r.N.toLocaleString('id-ID')}, ${r.kelas} kelas.`) } catch (e) { console.error(e); st('Gagal: ' + errMsg(e)) } };
-$('#png').onclick = async () => { if (!S.djpa) return st('Buat layout dulu.'); const t = document.createElement('canvas'); await render(t, 300); try { const a = document.createElement('a'); a.download = `Layout_${$('#tema').value}.png`; a.href = t.toDataURL('image/png'); a.click() } catch (e) { st('Ekspor diblokir oleh CORS citra Google. Pilih Esri Wayback atau tangkap layar.') } };
+$('#png').onclick = async () => {
+  if (!S.djpa) return st('Buat layout dulu.');
+  try {
+    const t = document.createElement('canvas'); await render(t, 300);
+    const a = document.createElement('a'); a.download = downloadBaseName($('#tema').value) + '.png'; a.href = t.toDataURL('image/png'); a.click();
+  } catch (e) {
+    console.error(e); st(/tainted|insecure|security/i.test(errMsg(e)) ? 'Ekspor diblokir oleh CORS citra Google. Pilih Esri Wayback atau tangkap layar.' : 'Gagal mengunduh PNG: ' + errMsg(e));
+  }
+};
 function makePdf(cv, title) {
   const { jsPDF } = window.jspdf, d = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PG.w * 10, PG.h * 10], compress: true });
   d.setProperties({ title }); d.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, PG.w * 10, PG.h * 10, undefined, 'FAST'); return d;
 }
 $('#pdf').onclick = async () => {
   if (!S.djpa) return st('Buat layout dulu.'); st('Menyiapkan PDF (300 dpi), mohon tunggu...');
-  try { const t = document.createElement('canvas'); await render(t, 300); makePdf(t, titleOf($('#tema').value) + ' ' + $('#tahun').value).save(`Layout_${$('#tema').value}.pdf`); st('PDF selesai diunduh.') }
+  try { const t = document.createElement('canvas'); await render(t, 300); const name = downloadBaseName($('#tema').value); makePdf(t, name).save(name + '.pdf'); st('PDF selesai diunduh.') }
   catch (e) { console.error(e); st(/tainted|insecure|security/i.test(errMsg(e)) ? 'Ekspor diblokir oleh CORS citra Google. Pilih Esri Wayback atau tangkap layar.' : 'Gagal membuat PDF: ' + errMsg(e)) }
 };
 
