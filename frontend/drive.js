@@ -53,7 +53,7 @@
         folderId = '';
         await requestToken('');
         const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${access}` }
+            headers: { Authorization: `Bearer ${token}` }
         });
         if (!response.ok) throw await apiError(response, 'Gagal membaca akun Google');
         const profile = await response.json();

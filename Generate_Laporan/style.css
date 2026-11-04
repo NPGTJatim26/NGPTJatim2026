@@ -32,12 +32,15 @@ body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,rg
 .upload-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:var(--hov);color:var(--ac);font-size:20px;font-weight:700;line-height:1}
 .file-name{max-width:100%;overflow-wrap:anywhere;color:var(--ac);font-size:12px}
 .fields{display:grid;gap:6px}.fields label{font-size:12px;color:var(--tx);font-weight:600;margin-top:7px}.fields label span{color:var(--mu);font-weight:400}
+.optional-fields{margin-top:14px;border-top:1px solid var(--bd);padding-top:10px}.optional-fields summary{font-size:12px;font-weight:700;cursor:pointer}.optional-fields .fields{margin-top:8px}
 input[type=text],input[type=number]{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit;font-size:13px}
 input:focus{outline:2px solid var(--ac);outline-offset:1px}input::placeholder{color:var(--mu)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 button{font:inherit;cursor:pointer}.actions button{min-height:40px;padding:9px 14px;border-radius:7px;border:1px solid var(--ac);background:var(--ac);color:var(--ac-tx);font-size:13px;font-weight:700}
 .actions button.o{background:transparent;color:var(--ac)}.actions button:hover:not(:disabled){filter:brightness(1.08)}button:disabled{opacity:.45;cursor:default}
 #st{font-size:12px;margin-top:10px;white-space:pre-wrap;min-height:18px}
+.validation{margin-top:10px;padding:10px 12px;border-left:3px solid var(--ac);background:var(--hov);font-size:12px;line-height:1.55}
+.validation[hidden]{display:none}.validation strong{display:block;margin-bottom:3px}.validation p{margin:3px 0;color:var(--mu)}.validation ul{margin:5px 0 0;padding-left:18px}.validation li+li{margin-top:2px}
 .note{margin:12px 0 0;padding-top:12px;border-top:1px solid var(--bd);color:var(--mu);font-size:11px;line-height:1.6}
 .fill-sample{background:#fff3a0;color:#111;padding:0 3px}
 @media(max-width:900px){.app{grid-template-columns:1fr;padding:14px 16px 32px}.side{position:static}.side,.advisory{padding:17px}}

@@ -195,10 +195,12 @@ const placeholderPara=text=>`<w:p><w:pPr><w:keepNext/><w:spacing w:before="120" 
 
 const capKey=t=>{
   let m=t.match(/^Gambar\s*(\d+)\.\s*(\d+)/);if(m)return m[1]+'.'+m[2];
+  m=t.match(/^Gambar\s*(III|IV)\s*[-–]\s*(\d+)/i);if(m)return m[1].toUpperCase()==='III'?`3.${m[2]}`:'IV'+m[2];
   m=t.match(/^Gambar\s*IV[\s\-]*(\d+)/);return m?'IV'+m[1]:null;
 };
 const tblKey=t=>{
   let m=t.match(/^Tabel\s*(\d+)\.\s*(\d+)/);if(m)return 'T'+m[1]+'.'+m[2];
+  m=t.match(/^Tabel\s*(III|IV)\s*[-–]\s*(\d+)/i);if(m)return m[1].toUpperCase()==='III'?'T3.'+m[2]:'TIV'+m[2];
   m=t.match(/^Tabel\s*IV[\s\-]*(\d+)/);return m?'TIV'+m[1]:null;
 };
 const TBLS={
@@ -207,6 +209,49 @@ const TBLS={
   'TIV1':{k:'IV-1'},'TIV2':{k:'IV-2'},'TIV3':{k:'IV-3'},'TIV4':{k:'IV-4'},'TIV5':{k:'IV-5'},'TIV6':{k:'IV-6'},'TIV7':{k:'IV-7'},'TIV8':{k:'IV-8'},
   'TIV9':{k:'IV-9'},'TIV10':{k:'IV-10'},'TIV11':{k:'IV-11'},'TIV12':{k:'IV-12'},'TIV14':{k:'IV-14'},'TIV15':{k:'IV-15'},'TIV16':{k:'IV-16'},'TIV17':{k:'IV-17'},'TIV18':{k:'IV-18'}
 };
+function setParagraphStyle(p,id){
+  let pp=kid(p,'pPr');if(!pp){pp=DOC.createElementNS(NSW,'w:pPr');p.insertBefore(pp,p.firstChild)}
+  let ps=kid(pp,'pStyle');if(!ps){ps=DOC.createElementNS(NSW,'w:pStyle');pp.insertBefore(ps,pp.firstChild)}
+  ps.setAttributeNS(NSW,'w:val',id);
+}
+function fieldParagraph(code){
+  const p=DOC.createElementNS(NSW,'w:p'),field=DOC.createElementNS(NSW,'w:fldSimple'),run=DOC.createElementNS(NSW,'w:r'),text=DOC.createElementNS(NSW,'w:t');
+  field.setAttributeNS(NSW,'w:instr',code);field.setAttributeNS(NSW,'w:dirty','true');
+  text.setAttributeNS(XMLNS,'xml:space','preserve');text.textContent='Daftar diperbarui saat dokumen dibuka di Microsoft Word.';
+  run.appendChild(text);field.appendChild(run);p.appendChild(field);return p;
+}
+async function configureWordFields(zip,body,warn){
+  const styleFile=zip.file('word/styles.xml');
+  if(styleFile){
+    const styles=new DOMParser().parseFromString(await styleFile.async('string'),'application/xml'),root=styles.documentElement,all=()=>Array.from(styles.getElementsByTagNameNS(NSW,'style'));
+    for(const[id,name]of[['CaptionTabel','Caption Tabel'],['CaptionGambar','Caption Gambar']]){
+      let style=all().find(s=>s.getAttributeNS(NSW,'styleId')===id);
+      if(!style){const base=all().find(s=>s.getAttributeNS(NSW,'styleId')==='Keterangan');style=base?base.cloneNode(true):styles.createElementNS(NSW,'w:style');style.setAttributeNS(NSW,'w:type','paragraph');style.setAttributeNS(NSW,'w:styleId',id);root.appendChild(style)}
+      let label=kid(style,'name');if(!label){label=styles.createElementNS(NSW,'w:name');style.insertBefore(label,style.firstChild)}
+      label.setAttributeNS(NSW,'w:val',name);
+    }
+    let xml=new XMLSerializer().serializeToString(styles);if(!xml.startsWith('<?xml'))xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'+xml;zip.file('word/styles.xml',xml);
+  }else warn.push('Styles DOCX tidak tersedia untuk membuat daftar tabel/gambar otomatis');
+
+  els(body,'p').forEach(p=>{const text=ptext(p).trim();if(/^Tabel\s/.test(text))setParagraphStyle(p,'CaptionTabel');else if(/^Gambar\s/.test(text))setParagraphStyle(p,'CaptionGambar')});
+  const replaceList=(title,nextTitle,code)=>{
+    const nodes=Array.from(body.children),at=nodes.findIndex(n=>isW(n,'p')&&ptext(n).trim().toUpperCase()===title),nextAt=nodes.findIndex((n,i)=>i>at&&isW(n,'p')&&ptext(n).trim().toUpperCase()===nextTitle);
+    if(at<0||nextAt<0){warn.push(`Bagian ${title} tidak ditemukan untuk pembaruan otomatis`);return}
+    const next=nodes[nextAt];let node=nodes[at].nextElementSibling;
+    while(node&&node!==next){const following=node.nextElementSibling;if(!(isW(node,'p')&&kid(kid(node,'pPr'),'sectPr')))body.removeChild(node);node=following}
+    body.insertBefore(fieldParagraph(code),next);
+  };
+  replaceList('DAFTAR ISI','DAFTAR TABEL','TOC \\o "1-3" \\h \\z \\u');
+  replaceList('DAFTAR TABEL','DAFTAR GAMBAR','TOC \\h \\z \\t "Caption Tabel,1"');
+  replaceList('DAFTAR GAMBAR','DAFTAR LAMPIRAN','TOC \\h \\z \\t "Caption Gambar,1"');
+
+  const settingsFile=zip.file('word/settings.xml');
+  if(settingsFile){
+    const settings=new DOMParser().parseFromString(await settingsFile.async('string'),'application/xml');let update=els(settings,'updateFields')[0];
+    if(!update){update=settings.createElementNS(NSW,'w:updateFields');settings.documentElement.appendChild(update)}
+    update.setAttributeNS(NSW,'w:val','true');let xml=new XMLSerializer().serializeToString(settings);if(!xml.startsWith('<?xml'))xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'+xml;zip.file('word/settings.xml',xml);
+  }else warn.push('Pengaturan DOCX tidak tersedia untuk pembaruan field otomatis');
+}
 
 async function loadTemplate(onNeedFile){
   try{
@@ -222,8 +267,8 @@ async function loadTemplate(onNeedFile){
 }
 
 async function generateNpgtDocx(opt){
-  const{SH,charts,wilayah,provinsi,kecamatan,onStatus,onNeedFile}=opt,warn=[],say=m=>onStatus&&onStatus(m);
-  const C=NpgtDocData.makeContext(SH,{wilayah,provinsi,kecamatan}),{W,pv,kc,isKota,nm}=C;
+  const{SH,charts,wilayah,provinsi,kecamatan,manual,onStatus,onNeedFile}=opt,warn=[],say=m=>onStatus&&onStatus(m);
+  const C=NpgtDocData.makeContext(SH,{wilayah,provinsi,kecamatan,manual}),{W,pv,kc,isKota,nm}=C;
   say('Memuat template Word…');
   const zip=await JSZip.loadAsync(await loadTemplate(onNeedFile));
   DOC=new DOMParser().parseFromString(await zip.file('word/document.xml').async('string'),'application/xml');
@@ -284,6 +329,13 @@ async function generateNpgtDocx(opt){
     if(!key)return;
     const pi=pageInfo(n);
     try{
+      if(key==='T1.1'){
+        const row=els(n,'tr').find(r=>{const cells=Array.from(r.children).filter(c=>isW(c,'tc'));return cells[1]&&/Survei Lapang/.test(ptext(cells[1]))});
+        const cells=row&&Array.from(row.children).filter(c=>isW(c,'tc')),paragraphs=cells&&els(cells[1],'p');
+        if(paragraphs&&paragraphs.length){setParaText(paragraphs[0],'Survei Lapang');paragraphs.slice(1).forEach(p=>setParaText(p,''))}
+        else warn.push('Baris Survei Lapang pada Tabel I-1 tidak ditemukan untuk disesuaikan');
+        return;
+      }
       if(key==='T3.1'){
         const names=kc.length?kc:[];
         const t={head:[['No','Kecamatan','Luas',''],['','','Ha','% Wilayah']],body:[...names.map((k,j)=>[j+1,k,'[ISI]','[ISI]']),[W,'','[ISI]','[ISI]']]};
@@ -291,7 +343,7 @@ async function generateNpgtDocx(opt){
       }
       const spec=TBLS[key];if(!spec)return;
       const t=M(spec.k);
-      if(!t){warn.push(`Sheet Tabel_${spec.k} tidak ditemukan untuk ${key}`);return}
+      if(!t||!C.d.D(t).length){warn.push(`Sheet Tabel_${spec.k} tidak tersedia atau kosong untuk ${key}`);n.replaceWith(...frag(placeholderPara(`[ISI: data Tabel ${spec.k} tidak tersedia di Excel]`)));return}
       n.replaceWith(...frag(mkTable(t,pi.avail,spec)));
     }catch(e){warn.push(`Tabel ${key}: ${e.message}`)}
   });
@@ -335,6 +387,24 @@ async function generateNpgtDocx(opt){
   // 4. Nama wilayah, provinsi, kecamatan, perbaikan kata rusak pada template
   say('Mengganti nama wilayah…');
   const n=kc.length,list=kc.map(k=>'Kecamatan '+k),ps=els(body,'p');
+  const planSignals=['III-10','IV-4','IV-7','IV-8','IV-11','IV-12'].map(C.d.plan).filter(Boolean),hasRdtr=planSignals.some(x=>x==='RDTR'||x==='RDTR/RTRW'),hasRtrw=planSignals.some(x=>x==='RTRW'||x==='RDTR/RTRW'),planType=hasRdtr&&hasRtrw?'RDTR/RTRW':hasRdtr?'RDTR':hasRtrw?'RTRW':'Rencana Tata Ruang';
+  const planTitle=planType==='RDTR'?'Rencana Detail Tata Ruang (RDTR)':planType==='RTRW'?'Rencana Tata Ruang Wilayah (RTRW)':planType==='RDTR/RTRW'?'Rencana Detail Tata Ruang (RDTR) dan Rencana Tata Ruang Wilayah (RTRW)':'Rencana Tata Ruang';
+  const roman=['','I','II','III','IV','V'];
+  ps.forEach(p=>replaceInPara(p,/^((?:Tabel|Gambar)\s+)([1-5])\.\s*(\d+)/g,m=>`${m[1]}${roman[+m[2]]}-${m[3]}`));
+  ps.forEach(p=>{
+    const tx=ptext(p).trim();
+    if(/^(Rencana Detail Tata Ruang(?: \(RDTR\))?|Rencana Tata Ruang Wilayah(?: \(RTRW\))?)$/i.test(tx))setParaText(p,planTitle);
+    else if(/^Rencana Detail Tata Ruang(?: \(RDTR\))?\s+/.test(tx)&&!/yang diatur melalui/i.test(tx))setParaText(p,`${planTitle} ${W}`);
+    if(!/^(Tabel|Gambar)\s/.test(tx))return;
+    if(planType==='RTRW'){
+      replaceInPara(p,/Rencana Detail Tata Ruang/g,()=>'Rencana Tata Ruang Wilayah');
+      replaceInPara(p,/\bRDTR\b/g,()=>'RTRW');
+    }else if(planType==='RDTR/RTRW'){
+      if(/Rencana Detail Tata Ruang/i.test(tx)){
+        replaceInPara(p,/Rencana Detail Tata Ruang(?:\s*\(RDTR\))?/g,()=>'Rencana Detail Tata Ruang (RDTR) dan Rencana Tata Ruang Wilayah (RTRW)');
+      }else if(/\bRDTR\b/i.test(tx)&&! /\bRTRW\b/i.test(tx))replaceInPara(p,/\bRDTR\b/g,()=>'RDTR/RTRW');
+    }
+  });
   const P=[
     [/xxx kecamatan yang meliputi Kecamatan xxx/g,()=>`${n} kecamatan yang meliputi ${list.length?L(list):'[ISI: daftar kecamatan]'}`],
     [/dengan xxx wilayah kecamatan/g,()=>`dengan ${n} wilayah kecamatan`],
@@ -348,7 +418,8 @@ async function generateNpgtDocx(opt){
   // Nama wilayah yang berbatasan berbeda dengan wilayah laporan; jadikan isian manual
   ps.forEach(p=>{
     const tx=ptext(p).trim();
-    if(/^Sebelah (Utara|Timur|Selatan|Barat)/.test(tx))replaceInPara(p,/Kab\/Kota XXX/g,()=>'[ISI: wilayah yang berbatasan]');
+    const direction=tx.match(/^Sebelah (Utara|Timur|Selatan|Barat)/),suffix={Utara:'North',Timur:'East',Selatan:'South',Barat:'West'},boundary=direction&&manual&&manual['boundary'+suffix[direction[1]]];
+    if(direction)replaceInPara(p,/Kab\/Kota XXX/g,()=>boundary||'[ISI: wilayah yang berbatasan]');
     else if(/berbatasan dengan Kab\/Kota XXX/.test(tx))replaceInPara(p,/berbatasan dengan Kab\/Kota XXX/g,()=>'berbatasan dengan [ISI: wilayah yang berbatasan]');
   });
   ps.forEach(p=>{const tx=ptext(p);if(!/XXX|xxx|Jawa Timur|JAWA TIMUR/.test(tx))return;P.forEach(([re,fn])=>replaceInPara(p,re,fn))});
@@ -363,13 +434,23 @@ async function generateNpgtDocx(opt){
   ps.forEach(p=>{if(!/XXX/.test(ptext(p)))return;rest++});
   if(rest)warn.push(`${rest} paragraf masih memuat "XXX"`);
 
-  // 5. Sisa isi spesifik wilayah lain pada Bab I-II ditandai stabilo
+  // 5. Generalisasi uraian wilayah contoh pada Bab I agar tidak terbawa ke daerah lain
+  K.slice(0,250).forEach(p=>{
+    if(!isW(p,'p'))return;
+    const text=ptext(p);
+    if(/sebagai kota pendidikan, pusat jasa, dan kawasan strategis di .*Malang Raya/i.test(text))setParaText(p,`${W} menghadapi dinamika pembangunan wilayah yang meningkatkan kebutuhan tanah untuk permukiman, kegiatan ekonomi, infrastruktur, dan pelayanan masyarakat. Perubahan tersebut dapat menambah tekanan terhadap ketersediaan dan fungsi ruang. Karena itu, kesesuaian rencana tata ruang (RTRW dan/atau RDTR) dengan penggunaan dan pemanfaatan tanah aktual perlu dievaluasi secara berkala.`);
+    else if(/Daerah Aliran Sungai Brantas/i.test(text))setParaText(p,`Permasalahan penatagunaan tanah di ${W} antara lain berkaitan dengan keterbatasan lahan sawah dan pertanian pangan berkelanjutan, alih fungsi ke kawasan terbangun, serta pemanfaatan ruang pada kawasan dengan daya dukung lingkungan terbatas. Kondisi di sekitar sempadan sungai dan kawasan rawan bencana juga perlu diperhatikan untuk menjaga kualitas lingkungan dan mengurangi risiko bencana.`);
+  });
+  // Tandai bila masih ada rujukan wilayah contoh yang belum tergeneralisasi.
   const marked=new Set();
   K.slice(0,250).forEach(p=>{
     if(!isW(p,'p'))return;
     els(p,'r').forEach(r=>{const tx=els(r,'t').map(t=>t.textContent).join('');if(/Malang|Brantas/.test(tx)){let rp=kid(r,'rPr');if(!rp){rp=DOC.createElementNS(NSW,'w:rPr');r.insertBefore(rp,r.firstChild)}addHl(rp);marked.add(p)}});
   });
   if(marked.size)warn.push(`${marked.size} paragraf Bab I berisi uraian khusus daerah contoh (disorot kuning) dan perlu disesuaikan manual`);
+
+  say('Menyiapkan daftar isi dan nomor halaman…');
+  await configureWordFields(zip,body,warn);
 
   // 6. Paket DOCX
   say('Menyusun berkas Word…');

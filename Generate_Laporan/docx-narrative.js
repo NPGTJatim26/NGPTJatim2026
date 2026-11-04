@@ -5,7 +5,7 @@ const NUMW=['nol','satu','dua','tiga','empat','lima','enam','tujuh','delapan','s
 const nw=n=>NUMW[n]??String(n);
 const BU=/Kampung|Perumahan|Perkantoran|Industri|Pergudangan|Jasa|Emplasemen|Olahraga|Gedung|Jalan/i;
 const ha=v=>f(v)+' Ha',pc=v=>f(v)+'%',lc=s=>String(s).replace(/\s+/g,' ').trim().toLowerCase();
-const share=(v,tot)=>pc(tot?v/tot*100:0);
+const share=(v,tot)=>N(v)&&N(tot)&&tot!==0?pc(v/tot*100):'';
 const kecName=k=>'Kecamatan '+k;
 
 function makeData(S){
@@ -15,7 +15,7 @@ function makeData(S){
   const M=k=>{const b=bl(k);return b&&b[0]};
   const D=t=>t?t.body.filter(r=>!isT(r)):[];
   const TT=t=>t&&(t.body.find(isT)||[]);
-  const plan=k=>{const t=(M(k)?.head||[]).flat().filter(v=>typeof v==='string').join(' ');return /RDTR\s*\/\s*RTRW/i.test(t)?'RDTR/RTRW':/Rencana Detail Tata Ruang|\bRDTR\b/i.test(t)?'RDTR':/\bRTRW\b/.test(t)?'RTRW':null};
+  const plan=k=>{const t=(M(k)?.head||[]).flat().filter(v=>typeof v==='string').join(' '),rdtr=/\bRDTR\b|Rencana Detail Tata Ruang/i.test(t),rtrw=/\bRTRW\b|Rencana Tata Ruang Wilayah/i.test(t);return rdtr&&rtrw?'RDTR/RTRW':rdtr?'RDTR':rtrw?'RTRW':null};
   return{sh,bl,M,D,TT,plan};
 }
 
@@ -26,7 +26,7 @@ function makeContext(S,form){
   const y0=(String(hd('III-6')[1]).match(/\d{4}/)||['2020'])[0],y1=(String(hd('III-7')[1]).match(/\d{4}/)||['2026'])[0];
   const h4=hd('III-4'),ya=String(h4[2]||'2021'),yp=String(h4.at(-1)||(+y1-1));
   const kc=form.kecamatan&&form.kecamatan.length?form.kecamatan:(t1?D(t1).map(r=>r[1]):[]);
-  return{d,W,pv:(form.provinsi||'').trim(),y0,y1,ya,yp,kc,isKota:/^Kota\b/i.test(W),nm:W.replace(/^(Kota|Kabupaten)\s+/i,'')};
+  return{d,W,pv:(form.provinsi||'').trim(),y0,y1,ya,yp,kc,manual:form.manual||{},isKota:/^Kota\b/i.test(W),nm:W.replace(/^(Kota|Kabupaten)\s+/i,'')};
 }
 
 // Isi sel kosong kecamatan/kelompok pada tabel rinci (baris pertama kelompok saja yang terisi).
@@ -43,8 +43,10 @@ function fillRecs(t,map){
 const groupSum=(recs,key,val)=>{const m={};recs.forEach(x=>{if(N(x[val]))m[x[key]]=(m[x[key]]||0)+x[val]});return Object.entries(m).sort((a,b)=>b[1]-a[1])};
 
 function makeNarr(C){
-  const{d,W,pv,y0,y1,ya,yp,kc}=C,{M,D,TT,bl,sh}=d;
-  const need=k=>{const t=M(k);if(!t)throw new Error('Sheet Tabel_'+k+' tidak ditemukan');return t};
+  const{d,W,pv,y0,y1,ya,yp,kc,manual}=C,{M,D,TT,bl,sh}=d;
+  const need=k=>{const t=M(k);if(!t||!D(t).length)throw new Error('Sheet Tabel_'+k+' tidak ditemukan atau tidak berisi data');return t};
+  const planSignals=['III-10','IV-4','IV-7','IV-8','IV-11','IV-12'].map(d.plan).filter(Boolean),hasRdtr=planSignals.some(x=>x==='RDTR'||x==='RDTR/RTRW'),hasRtrw=planSignals.some(x=>x==='RTRW'||x==='RDTR/RTRW'),reportPlan=hasRdtr&&hasRtrw?'RDTR/RTRW':hasRdtr?'RDTR':hasRtrw?'RTRW':'rencana tata ruang';
+  const planLabel=()=>reportPlan,planTitle=label=>label==='RDTR'?'Rencana Detail Tata Ruang (RDTR)':label==='RTRW'?'Rencana Tata Ruang Wilayah (RTRW)':label==='RDTR/RTRW'?'Rencana Detail Tata Ruang (RDTR) dan Rencana Tata Ruang Wilayah (RTRW)':'Rencana Tata Ruang';
   const areaTot=()=>{const t=need('III-1');return TT(t)[2]};
   const kecArea=()=>{const o={};D(need('IV-9')).forEach(r=>{o[r[1]]=r[6]});return o};
   const agg=t=>{const w=t.head[0].length,r=D(t),T=TT(t),tot=T[w-2];return{bs:sum(r.filter(x=>BU.test(x[1])),w-2)/tot*100,as:sum(r.filter(x=>AG.test(x[1])),w-2)/tot*100}};
@@ -53,8 +55,11 @@ function makeNarr(C){
   const add=(idx,kw,fn)=>{N_[idx]={kw,fn}};
 
   // ===== BAB III =====
-  add(254,/Secara Administrasi wilayah/,()=>`Secara administrasi wilayah ${W} terletak di Provinsi ${pv||'[ISI: provinsi]'} yang terdiri dari ${kc.length} kecamatan dengan [ISI: jumlah kelurahan/desa] kelurahan/desa. Luas wilayah ${W} adalah sebesar [ISI: luas wilayah] Ha. Wilayah ${W} secara geografis terletak pada koordinat antara [ISI: koordinat bujur dan lintang]. (Sumber : [ISI: sumber data]). Batas-batas administratif wilayah ${W} sebagai berikut:`);
-  add(328,/^Sumber/,()=>'Sumber : [ISI: peraturan daerah/kepala daerah tentang RDTR beserta nomor dan tahun]');
+  add(254,/Secara Administrasi wilayah/,()=>{
+    const area=manual.area?`${manual.area.replace(/\s*Ha$/i,'')} Ha`:((N(TT(M('III-1'))?.[2]))?ha(TT(M('III-1'))[2]):'[ISI: luas wilayah] Ha'),value=(key,label)=>manual[key]||`[ISI: ${label}]`;
+    return `Secara administrasi wilayah ${W} terletak di Provinsi ${pv||'[ISI: provinsi]'} yang terdiri dari ${kc.length} kecamatan dengan ${value('villageCount','jumlah kelurahan/desa')} kelurahan/desa. Luas wilayah ${W} adalah sebesar ${area}. Wilayah ${W} secara geografis terletak pada koordinat antara ${value('coordinates','koordinat bujur dan lintang')}. Topografi wilayah berupa ${value('topography','topografi wilayah')}. (Sumber : ${value('areaSource','sumber data')}). Batas-batas administratif wilayah ${W} sebagai berikut:`;
+  });
+  add(328,/^Sumber/,()=>`Sumber : ${manual.rdtrRegulation||'[ISI: dasar hukum rencana tata ruang (RDTR/RTRW) beserta nomor dan tahun]'}`);
   add(262,/luas wilayah administrasi/,()=>`Berdasarkan Tabel di atas, menunjukkan bahwa luas wilayah administrasi ${W} seluas [ISI: luas wilayah menurut Kemendagri/BPS] Ha dengan urutan kecamatan terluas adalah [ISI: urutan kecamatan terluas beserta luasnya]. Sedangkan, [ISI: nama kecamatan] merupakan kecamatan dengan persentase terendah yakni [ISI: persentase] atau seluas [ISI: luas] Ha.`);
   add(266,/luas wilayah administrasi/,()=>{
     const t=need('III-1'),r=D(t),T=TT(t),s=srt(r,2),top=s.slice(0,Math.min(4,Math.max(1,s.length-1))),lo=s.at(-1);
@@ -118,12 +123,13 @@ function makeNarr(C){
     const rest=s.filter(x=>!ex.has(x)).slice(0,4),reg=sum(r.filter(x=>/^(Hak Milik|Hak Guna|Hak Pakai|Hak Pengelolaan|Tanah Milik Wakaf)/i.test(x[1])),w-2)/tot*100;
     return `Berdasarkan data Gambaran Umum Penguasaan Tanah (GUPT) ${W} Tahun ${y1}, status penguasaan lahan secara signifikan didominasi oleh ${top[1]} sebesar ${ha(top[w-2])} (${pc(top[w-1])}), dengan konsentrasi terluas berada di ${kecName(ti[0])} mencapai ${ha(ti[1])}.${hgb.length?` Penguasaan tanah berstatus Hak Guna Bangunan (HGB) menempati porsi ${pc(sum(hgb,w-1))} yang terdiri atas ${L(hgb.map(x=>`${x[1].replace(/^Hak Guna Bangunan \(HGB\) - /,'HGB ')} seluas ${ha(x[w-2])} (${pc(x[w-1])})`))}.`:''}${bt?` Sementara itu, ${bt[1]} sebesar ${ha(bt[w-2])} (${pc(bt[w-1])}); kategori tersebut memiliki catatan bahwa data tersebut mencakup beberapa kekosongan data spasial akibat galat pada data unduhan Geo-KKP serta bidang tanah yang masih dalam proses pendaftaran (K1, K2, K3, K4) sehingga tidak serta-merta menunjukkan bahwa seluruh luasan tersebut benar-benar belum terdaftar secara yuridis.`:''}${rest.length?` Selanjutnya, ${L(rest.map(x=>`${x[1]} seluas ${ha(x[w-2])} (${pc(x[w-1])})`))}.`:''} Kondisi tersebut mengindikasikan bahwa ${reg>=50?`mayoritas penguasaan tanah di ${W} telah teregistrasi sebagai hak atas tanah`:`sebagian besar tanah di ${W} belum tercatat sebagai hak atas tanah`}.`;
   });
-  add(325,/Rencana Detail Tata Ruang \(RDTR\)/,()=>{
+  add(325,/Rencana (?:Detail Tata Ruang|Tata Ruang Wilayah|Tata Ruang)/,()=>{
     const t=need('III-10'),w=t.head[0].length,T=TT(t);
-    return `Rencana Detail Tata Ruang (RDTR) ${W} yang diatur melalui [ISI: peraturan daerah/kepala daerah beserta nomor dan tahun] merupakan instrumen operasional tata ruang wilayah yang menjadi acuan penting dalam mewujudkan pemanfaatan ruang yang serasi, selaras, berwawasan lingkungan, serta berkelanjutan untuk jangka waktu [ISI: jangka waktu rencana]. Berdasarkan dokumen RDTR ini, struktur pemanfaatan ruang di seluruh Wilayah Perencanaan (WP) ${W} seluas ${ha(T[w-2])} dibagi ke dalam [ISI: alokasi utama pola ruang]. Berikut merupakan Pola Ruang dalam RDTR ${W} Tahun [ISI: tahun penetapan].`;
+    const type=planLabel('III-10'),title=planTitle(type),legal=manual.rdtrRegulation||'[ISI: dasar hukum rencana tata ruang (RDTR/RTRW) beserta nomor dan tahun]';
+    return `${title} ${W} yang diatur melalui ${legal} menjadi acuan dalam mewujudkan pemanfaatan ruang yang serasi, selaras, berwawasan lingkungan, dan berkelanjutan untuk jangka waktu ${manual.rdtrPeriod||'[ISI: jangka waktu rencana]'}. Berdasarkan dokumen tersebut, struktur pemanfaatan ruang di seluruh Wilayah Perencanaan (WP) ${W} seluas ${ha(T[w-2])} dibagi ke dalam [ISI: alokasi utama pola ruang]. Berikut merupakan pola ruang ${type} ${W} Tahun ${manual.rdtrYear||'[ISI: tahun penetapan]'}.`;
   });
   add(330,/rencana pola ruang/,()=>{
-    const t=need('III-10'),w=t.head[0].length,r=D(t),s=srt(r,w-2),kcs=t.head[1].slice(2,w-2).map(String),RT=d.plan('III-10')||'RDTR';
+    const t=need('III-10'),w=t.head[0].length,r=D(t),s=srt(r,w-2),kcs=t.head[1].slice(2,w-2).map(String),RT=planLabel('III-10');
     const byKec=row=>kcs.map((k,i)=>[k,row[2+i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
     const pg=r.find(x=>/Tanaman Pangan/i.test(x[1])),t1=byKec(s[0]),t2=byKec(s[1]);
     let tx=`Adapun rencana pola ruang ${RT} ${W} dalam hal ini didominasi oleh ${lc(s[0][1])} seluas ${ha(s[0][w-2])} (${pc(s[0][w-1])}), diikuti ${L(s.slice(1,5).map(x=>`${lc(x[1])} sebesar ${ha(x[w-2])} (${pc(x[w-1])})`))}. Spesifik distribusi spasial, ${lc(s[0][1])} tersebar di ${nw(t1.length)} kecamatan dengan luasan terbesar di ${L(t1.slice(0,3).map(x=>`${x[0]} sebesar ${ha(x[1])}`))}. Sementara itu, ${lc(s[1][1])} relatif terkonsentrasi di ${L(t2.slice(0,2).map(x=>`${x[0]} sebesar ${ha(x[1])}`))}.`;
@@ -131,7 +137,7 @@ function makeNarr(C){
     return tx;
   });
   add(331,/Rencana pola ruang/,()=>{
-    const t=need('III-10'),w=t.head[0].length,r=D(t),T=TT(t),RT=d.plan('III-10')||'RDTR';
+    const t=need('III-10'),w=t.head[0].length,r=D(t),T=TT(t),RT=planLabel('III-10');
     const pg=r.find(x=>/Tanaman Pangan/i.test(x[1])),prot=r.filter(x=>/Perlindungan|Taman|Pemakaman|Jalur Hijau|Mangrove|Ruang Terbuka|Badan Air|Cagar/i.test(x[1])&&x[w-2]>0),ps=srt(prot,w-2).slice(0,4),urb=srt(r.filter(x=>/Perumahan|Perdagangan|Jasa/i.test(x[1])),w-2).slice(0,2);
     return `Rencana pola ruang ${W} berdasarkan ${RT} menunjukkan bahwa arah perkembangan wilayah tetap bertumpu pada fungsi perkotaan${urb.length?`, terutama ${L(urb.map(x=>lc(x[1])))}`:''}, namun masih disertai dengan ruang yang dipertahankan untuk fungsi pertanian, perlindungan, dan ruang terbuka. Kondisi ini terlihat dari dialokasikannya ${[pg?`${ha(pg[w-2])} untuk tanaman pangan`:'',ps.length?`${L(ps.map(x=>`${lc(x[1])} seluas ${ha(x[w-2])}`))}`:''].filter(Boolean).join(' serta ')}. Di sisi lain, dominasi zona perumahan maupun perdagangan menunjukkan tingginya kebutuhan ruang dalam rangka mendukung aktivitas perkotaan dan perekonomian ${W}. Komposisi ini menggambarkan adanya keseimbangan yang perlu dijaga antara perkembangan kawasan terbangun dengan keberadaan ruang pertanian dan kawasan yang memiliki fungsi perlindungan. Dengan karakter tersebut, rencana pola ruang dapat memberikan gambaran arah perkembangan ${W} sekaligus batasan fungsi ruang yang perlu diperhatikan dalam pemanfaatan tanah di masing-masing wilayah dengan total luas ${ha(T[w-2])}.`;
   });
@@ -190,7 +196,7 @@ function makeNarr(C){
     const t=need('IV-6'),r=D(t),ex=r.filter(x=>Math.abs(x[7])>100),nr=r.filter(x=>Math.abs(x[7])>1e-6&&Math.abs(x[7])<=100),up=srt(nr,7).filter(x=>x[7]>0),dn=[...nr].sort((a,b)=>a[7]-b[7]).filter(x=>x[7]<0),big=[...r].sort((a,b)=>Math.abs(b[2])-Math.abs(a[2]))[0];
     return `Adapun laju perubahan penggunaan tanah memperlihatkan tingkat dinamika masing-masing kelas penggunaan tanah selama periode Tahun ${y0}–${y1} (Tabel IV-6 dan Gambar IV-5). ${up.length?`Secara positif, kelas ${lc(up[0][1])} memiliki laju perubahan tertinggi sebesar ${pc(up[0][7])} per tahun, dari ${ha(up[0][4])} menjadi ${ha(up[0][3])}${up.length>1?`, diikuti ${L(up.slice(1,3).map(x=>`${lc(x[1])} sebesar ${pc(x[7])} per tahun`))}`:''}.`:'Tidak terdapat kelas dengan laju perubahan positif yang signifikan.'}${ex.length?` Kelas ${L(ex.map(x=>lc(x[1])))} memiliki laju yang sangat tinggi karena luas tahun awal relatif sangat kecil sehingga lebih tepat dibaca melalui selisih luas absolut (${L(ex.map(x=>ha(x[2])))}).`:''}${dn.length?` Sementara itu, penurunan paling tinggi terjadi pada ${L(dn.slice(0,3).map(x=>`${lc(x[1])} sebesar ${pc(x[7])} per tahun`))}.`:''}${big?` Secara luasan absolut, perubahan terbesar terjadi pada kelas ${lc(big[1])} yang ${big[2]>=0?'bertambah':'berkurang'} ${ha(Math.abs(big[2]))}.`:''}`;
   });
-  add(391,/Adapun kesesuaian penggunaan tanah terhadap rencana tata ruang secara konseptual/,old=>old.replace(/Adapun RDTR ditetapkan melalui .*?\. (?=Ketentuan ITBX)/,'Adapun RDTR ditetapkan melalui [ISI: nomor dan tahun peraturan RDTR]. '));
+  add(391,/Adapun kesesuaian penggunaan tanah terhadap rencana tata ruang secara konseptual/,old=>old.replace(/Adapun .*? ditetapkan melalui .*?\. (?=Ketentuan ITBX)/,`Adapun ${planTitle(planLabel('IV-7'))} ditetapkan melalui ${manual.rdtrRegulation||'[ISI: dasar hukum rencana tata ruang]'}. `).replace(/Ketentuan ITBX RDTR\b/g,`Ketentuan ITBX ${planLabel('IV-7')}`).replace(/terhadap RDTR\b/g,`terhadap ${planLabel('IV-7')}`));
   const srcLine=()=>`Sumber: Pengolahan Kantor Wilayah Badan Pertanahan Nasional Provinsi ${pv||'[ISI: Provinsi]'} Tahun ${y1}; [ISI: nomor dan tahun peraturan RDTR/RTRW]`;
   add(396,/^Sumber/,srcLine);
   add(400,/^Sumber/,srcLine);
@@ -198,7 +204,7 @@ function makeNarr(C){
     const b8=bl('IV-8');if(!b8)throw new Error('Sheet Tabel_IV-8 tidak ditemukan');
     const dt=b8[0],sm=b8[1]||b8[0],r8=sm.body.filter(r=>!/^(Kota|Kabupaten|Total|Jumlah)/.test(String(r[0]))&&N(r[2])),T=sm.body.find(r=>/^(Kota|Kabupaten|Total)/.test(String(r[0])))||[];
     const rec=fillRecs(dt,(r,k,gp)=>({k,p:gp,s:r[3],sp:r[4],m:r[5],t:r[7],tp:r[8],j:r[9]}));
-    return{r8,T,rec,RT:d.plan('IV-8')||'RDTR'};
+    return{r8,T,rec,RT:planLabel('IV-8')};
   };
   add(405,/Penggunaan tanah .* Tahun .* secara umum menunjukkan/,()=>{
     const{r8,T,RT}=iv8(),s=srt(r8,3);
@@ -245,7 +251,7 @@ function makeNarr(C){
   });
   const iv11=()=>fillRecs(need('IV-11'),(r,k,gp)=>({k,p:gp,a:r[3],n:r[5],j:r[7]}));
   add(437,/Ketersediaan tanah berdasarkan rencana pola ruang/,()=>{
-    const rec=iv11(),gs=groupSum(rec,'p','a').filter(x=>x[1]>0).slice(0,5),RT=d.plan('IV-11')||'RDTR';
+    const rec=iv11(),gs=groupSum(rec,'p','a').filter(x=>x[1]>0).slice(0,5),RT=planLabel('IV-11');
     return `Ketersediaan tanah berdasarkan rencana pola ruang ${RT} menunjukkan bahwa ruang yang masih memiliki peluang pengembangan di ${W} tersebar pada berbagai fungsi ruang dan tidak seluruhnya berada pada pola ruang yang bersifat pengembangan (Tabel IV-11). Sebagian tanah tersedia berada pada pola ruang ${L(gs.map(x=>`${lc(x[0])} (${ha(x[1])})`))}. Dengan demikian, tanah yang teridentifikasi tersedia di ${W} perlu diarahkan dengan mempertimbangkan fungsi ruang agar pemanfaatannya dapat berkembang secara tepat sesuai karakter dan ketentuan pola ruang masing-masing wilayah.`;
   });
   add(438,/Secara spasial, ketersediaan tanah/,()=>{
@@ -254,7 +260,7 @@ function makeNarr(C){
     return `${seg.join(' ')} Sebaran tersebut memperlihatkan tanah tersedia di ${W} memiliki karakter ruang beragam sehingga peluang pengembangannya tidak hanya ditentukan oleh luas, tetapi juga oleh lokasi serta fungsi ruangnya.`;
   });
   add(439,/Sementara itu, tanah tidak tersedia tetap mendominasi/,()=>{
-    const t=need('IV-9'),r=D(t),ps=r.map(x=>x[5]),mxA=mx(r,4),RT=d.plan('IV-11')||'RDTR';
+    const t=need('IV-9'),r=D(t),ps=r.map(x=>x[5]),mxA=mx(r,4),RT=planLabel('IV-11');
     return `Sementara itu, tanah tidak tersedia ${ps.every(v=>v>=50)?'tetap mendominasi seluruh kecamatan':'tersebar pada seluruh kecamatan'}, dengan proporsi berkisar ${f(Math.min(...ps))}–${pc(Math.max(...ps))} dan luas terbesar terdapat di ${kecName(mxA[1])} sebesar ${ha(mxA[4])} (${pc(mxA[5])}). Dominasi tersebut menggambarkan keterbatasan ruang yang dapat dikembangkan secara baru, terutama pada wilayah yang telah memiliki fungsi ruang perkotaan maupun fungsi strategis lainnya. Bagi ${W}, kondisi ini menegaskan perlunya mengoptimalkan tanah yang masih tersedia secara selektif, sekaligus mengendalikan tekanan terhadap ruang yang telah memiliki fungsi tertentu agar perkembangan permukiman, kegiatan ekonomi, dan infrastruktur tetap sejalan dengan struktur ruang yang telah ditetapkan. Sebagai catatan kemudian bahwa status ketersediaan hasil penyandingan dengan pola ruang ${RT} belum menunjukkan bentuk pemanfaatan yang dapat dilakukan secara langsung karena setiap bidang masih memiliki keterkaitan fungsi ruang yang ditetapkan. Oleh karena itu, hasil tersebut perlu diterjemahkan ke dalam arahan ketersediaan tanah (Tabel IV-12) untuk melihat bentuk pemanfaatan atau penyesuaian yang sesuai dengan fungsi ruang masing-masing.`;
   });
   const clsA=a=>/^Tidak tersedia/i.test(a)?'tidak':/Kawasan lindung/i.test(a)?'lindung':/optimalisasi/i.test(a)?'opt':/sesuai tata ruang/i.test(a)?'sesuai':/penyesuaian/i.test(a)?'sesuaikan':'lain';
@@ -277,7 +283,7 @@ function makeNarr(C){
   add(452,/Selain arahan optimalisasi/,old=>{
     const rec=iv12(),tot=areaTot(),S=c=>rec.filter(x=>x.c===c).reduce((s,x)=>s+x.a,0);
     const first=`Selain arahan optimalisasi, terdapat ${ha(S('sesuai'))} (${share(S('sesuai'),tot)}) yang diarahkan tersedia sesuai tata ruang, ${ha(S('sesuaikan'))} (${share(S('sesuaikan'),tot)}) untuk penyesuaian penggunaan tanah, dan ${ha(S('lindung'))} (${share(S('lindung'),tot)}) untuk penyesuaian penggunaan tanah di kawasan lindung, sementara ${ha(S('tidak'))} (${share(S('tidak'),tot)}) tetap berada pada kategori tidak tersedia.`;
-    return old.replace(/^Selain arahan optimalisasi.*?kategori tidak tersedia\./,first).replace(/rencana pola ruang RDTR/g,`rencana pola ruang ${d.plan('IV-12')||'RDTR'}`);
+    return old.replace(/^Selain arahan optimalisasi.*?kategori tidak tersedia\./,first).replace(/rencana pola ruang RDTR/g,`rencana pola ruang ${planLabel('IV-12')}`);
   });
   add(454,/Potensi pertanian pangan dan potensi sektor lain/,old=>{
     const t=need('IV-16'),sec=[...new Set(t.body.filter(r=>!B(r[1])&&typeof r[1]==='string').map(r=>sector(r[1])))];
@@ -336,7 +342,7 @@ function makeNarr(C){
     return `Potensi sosial ekonomi ${W} menunjukkan keterkaitan ketersediaan tanah, penguasaan tanah dan kepadatan penduduk sebagai informasi dalam melihat peluang pengembangan wilayah. Secara keseluruhan, tanah teridentifikasi tersedia mencapai ${ha(T[2])} atau ${pc(T[3])} dari luas wilayah dan ${ha(T[4])} (${pc(T[5])}) termasuk tidak tersedia. Dari sisi penguasaan, sebanyak ${ha(T[8])} (${pc(T[9])}) telah memiliki hak atas tanah (HAT), sementara ${ha(T[6])} (${pc(T[7])}) belum memiliki HAT. Kondisi tersebut menunjukkan ruang yang tersedia ${T[3]<30?'relatif terbatas':'cukup besar'}, ${T[9]>=50?'meskipun sebagian besar tanah memiliki kepastian penguasaan':'dan sebagian besar tanah belum memiliki kepastian penguasaan'}. Kombinasi ketersediaan tanah, HAT, dan kepadatan penduduk menjadi indikasi awal dalam menelaah lokasi pengembangan atau investasi, tetapi tidak menunjukkan bahwa tanah tersebut otomatis siap dimanfaatkan.`;
   });
   add(507,/Malang|Kecamatan|memiliki tanah tersedia/,()=>{
-    const t=need('IV-18'),r=D(t),s=srt(r,2),dn=mx(r,10),dl=mn(r,10),RT=d.plan('IV-9')||d.plan('IV-8')||'RDTR';
+    const t=need('IV-18'),r=D(t),s=srt(r,2),dn=mx(r,10),dl=mn(r,10),RT=d.plan('IV-9')||d.plan('IV-8')||'rencana tata ruang';
     const seg=s.map((x,i)=>`${i===0?'':i===1?'Sementara itu, ':'Selanjutnya, '}${kecName(x[1])} memiliki tanah tersedia sebesar ${ha(x[2])} (${pc(x[3])}), dengan HAT ${ha(x[8])} (${pc(x[9])}) dan kepadatan penduduk ${f(x[10],0)} jiwa/km².`);
     return `${seg.join(' ')} Kepadatan penduduk tertinggi terdapat di ${kecName(dn[1])} (${f(dn[10],0)} jiwa/km²) dan terendah di ${kecName(dl[1])} (${f(dl[10],0)} jiwa/km²). Dalam hal ini, ${kecName(s[0][1])} menjadi kecamatan yang paling potensial untuk ditelaah lebih lanjut karena memiliki luasan tanah tersedia terbesar${s[0][9]>=50?' dan persentase HAT yang tinggi':''}. Meskipun demikian, pemanfaatan informasi sosial ekonomi perlu dilakukan secara selektif dengan menelaah status penguasaan, penggunaan tanah, dan kesesuaiannya terhadap ${RT}.`;
   });
