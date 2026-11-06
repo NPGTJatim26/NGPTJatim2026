@@ -7,8 +7,24 @@ dari folder yang sama dengan `index.html`, jadi **harus dibuka lewat server** (G
 `index.html`, `app.js`, `style.css`, `logo.js`, `font.js`, `Simbol_semua.stylx`, `RTR.stylx`, `Toponim.stylx`
 
 ## Input pengguna
-Peta DJPA (.zip), Peta Dasar PT LN (.zip), Batas Kab/Kota Jatim (.zip), Peta Titik Survei (.zip, opsional), Garis Pantai (.zip, opsional), dan Batimetri (.zip berisi .tif + .tfw/.prj, opsional).
+Peta DJPA (.zip shapefile), Peta Dasar PT LN (.zip), Batas Kab/Kota Jatim (.zip), Peta Titik Survei (.zip, opsional), Garis Pantai (.zip, opsional), dan Batimetri (.zip berisi .tif + .tfw/.prj, opsional).
 Mengganti simbologi cukup mengganti file `.stylx` di folder yang sama.
+
+### Menyiapkan DJPA dari File Geodatabase besar
+Halaman peta memproses data DJPA di browser. Jangan unggah GDB berukuran gigabyte langsung: FileGDB perlu diekstrak dan dikonversi, yang dapat menghabiskan memori browser. Ekspor secara lokal ke ZIP shapefile yang hanya membawa kolom yang dipakai peta:
+
+1. Ekstrak arsip `.rar`/`.zip` agar tersedia folder `.gdb`.
+2. Siapkan Python 3.10+ dengan `pyogrio` (`python -m pip install pyogrio`).
+3. Jalankan dari folder ini:
+
+   ```powershell
+   python .\prepare_djpa_gdb.py "D:\data\NPGT_DJPA_JAWATIMUR.gdb" "D:\data\DJPA_ringan.zip" --kabupaten "Kota Pasuruan"
+   ```
+
+   Gunakan `--kabupaten "NAMA WADMKK"` untuk mengekspor satu Kabupaten/Kota; ini sangat disarankan untuk mengurangi ukuran dan beban browser. Layer berisi lebih dari 100.000 fitur wajib memakai `--kabupaten` (atau `--all`); ZIP seluruh Jawa Timur berisi `.shp` ±3,4 GB sehingga gagal dibaca browser ("uncompressed data size mismatch"). Jika deteksi otomatis tidak menemukan satu layer DJPA, tentukan nama layer dengan `--layer "NAMA_LAYER"`. Memori saat ekspor dapat disetel dengan `--chunk-size 2000` (default 5000).
+4. Unggah `DJPA_ringan.zip` pada input **Peta DJPA** seperti ZIP shapefile biasa.
+
+Ekspor dilakukan bertahap, menghapus koordinat Z dan kolom yang tidak digunakan, serta mempertahankan geometri dan sistem koordinat sumber. Data tidak diunggah selama proses konversi. Ukuran hasil tetap bergantung pada kompleksitas geometri; membatasi ekspor ke satu Kabupaten/Kota biasanya paling mengurangi beban halaman.
 
 ## Catatan
 - Garis pantai diambil langsung dari fitur "Garis Pantai" pada Peta Dasar yang diunggah.
